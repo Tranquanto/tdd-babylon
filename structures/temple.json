@@ -1,0 +1,62 @@
+{
+  "__comment": "'null' in the key means that the block will not be replaced; functions like a Minecraft structure void.",
+  "key": {
+    " ": null,
+    "X": "limestoneBrick",
+    "O": "air",
+    "L": "limestoneBrick",
+    "r": "crate"
+  },
+  "layout": [
+    [
+      "XXXXXXXX",
+      "XXXXXXXX",
+      "XXLXXLXX",
+      "XXXXXXXX",
+      "XXXXXXXX",
+      "XXLXXLXX",
+      "XXXXXXXX",
+      "XXXXXXXX"
+    ],
+    [
+      "XXXXXXXX",
+      "XOOOOOOX",
+      "XOrOOrOX",
+      "XOOggOOX",
+      "XOOggOOX",
+      "XOrOOrOX",
+      "XOOOOOOX",
+      "XXXXXXXX"
+    ],
+    [
+      "XXXXXXXX",
+      "XOOOOOOX",
+      "XOOOOOOX",
+      "XOOGGOOX",
+      "XOOGGOOX",
+      "XOOOOOOX",
+      "XOOOOOOX",
+      "XXXXXXXX"
+    ],
+    [
+      "        ",
+      " XXXXXX ",
+      " XOOOOX ",
+      " XOOOOX ",
+      " XOOOOX ",
+      " XOOOOX ",
+      " XXXXXX ",
+      "        "
+    ],
+    [
+      "        ",
+      "        ",
+      "  XXXX  ",
+      "  XXXX  ",
+      "  XXXX  ",
+      "  XXXX  ",
+      "        ",
+      "        "
+    ]
+  ]
+}

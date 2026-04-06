@@ -1,0 +1,96 @@
+{
+  "key": {
+    " ": "air",
+    "t": "torch",
+    "l": "lava",
+    "L": "lightBox",
+    "s": "silverBrick",
+    "S": "shaleBlock",
+    "z": "zirconBrick",
+    "o": "obsidianBrick",
+    "c": "chain",
+    "x": "darkGem",
+    "O": "obsidian",
+    "-": null
+  },
+    "layout": [
+    [
+      "-----------",
+      "-----------",
+      "---OOOOO---",
+      "--OO---OO--",
+      "--O-----O--",
+      "--O-----O--",
+      "--O-----O--",
+      "--OO---OO--",
+      "---OOOOO---",
+      "-----------",
+      "-----------"
+    ],
+    [
+      "sssssssssss",
+      "sssssssssss",
+      "ssslllllsss",
+      "ssllooollss",
+      "sslooooolss",
+      "sslooooolss",
+      "sslooooolss",
+      "ssllooollss",
+      "ssslllllsss",
+      "sssssssssss",
+      "sssssssssss"
+    ],
+    [
+      "zzzzzzzzzzz",
+      "z         z",
+      "z c     c z",
+      "z         z",
+      "z   t t   z",
+      "z    S    z",
+      "z   t t   z",
+      "z         z",
+      "z c     c z",
+      "z         z",
+      "zzzzzzzzzzz"
+    ],
+    [
+      "ooooooooooo",
+      "o         o",
+      "o c     c o",
+      "o         o",
+      "o         o",
+      "o         o",
+      "o         o",
+      "o         o",
+      "o c     c o",
+      "o         o",
+      "ooooooooooo"
+    ],
+    [
+      "zzzzzzzzzzz",
+      "z         z",
+      "z c     c z",
+      "z         z",
+      "z         z",
+      "z    S    z",
+      "z         z",
+      "z         z",
+      "z c     c z",
+      "z         z",
+      "zzzzzzzzzzz"
+    ],
+    [
+      "sssssssssss",
+      "sssssssssss",
+      "sssssssssss",
+      "sssLsssLsss",
+      "sssssssssss",
+      "sssssssssss",
+      "sssssssssss",
+      "sssLsssLsss",
+      "sssssssssss",
+      "sssssssssss",
+      "sssssssssss"
+    ]
+  ]
+}

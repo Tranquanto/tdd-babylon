@@ -1,0 +1,180 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>The Draconic Depths (Babylon.JS Edition)</title>
+    <link rel="stylesheet" href="styles.css">
+    <meta property="og:title" content="The Draconic Depths (Babylon.JS Edition)">
+    <meta property="og:description" content="A simple 3-D infinite mining game inspired by games such as Malachite Miners 2 and REx: Reincarnated.">
+    <meta property="og:image" content="https://tranquanto.github.io/the-draconic-depths/img/block/dragonite.png">
+    <meta property="og:url" content="https://tranquanto.github.io/the-draconic-depths/">
+    <meta property="og:site_name" content="The Draconic Depths (Babylon.JS Edition)">
+</head>
+<body>
+    <div id="logo-container" class="fullsize">
+        <img id="logo" src="img/logo.png" alt="The Draconic Depths Logo">
+    </div>
+    <div id="main-menu" class="menu">
+        <button id="play-btn">Play</button>
+        <button id="settings-btn">Settings</button>
+        <button id="changelog-btn">Changelog</button>
+        <button id="controls-btn">How to Play</button>
+        <button id="credits-btn">Credits</button>
+        <button id="exit-btn">Back to Home</button>
+        <img id="dragonite" src="img/block/dragonite.png" alt="dragonite.png" style="position: fixed; bottom: 0; right: 0; width: 14vw;">
+        <div id="links">
+            <a href="https://discord.gg/JMmfFs7Fss" target="_blank"><img src="img/menu/discord.svg" alt="Discord"></a>
+            <a href="https://github.com/Tranquanto/the-draconic-depths" target="_blank"><img src="img/menu/github.svg" alt="GitHub"></a>
+            <span id="version">Version Unknown</span>
+        </div>
+    </div>
+    <div id="play-menu" class="menu" style="display: none;">
+        <h1>Play</h1>
+        <button id="play-normal">Normal</button>
+        <button id="play-sandbox" style="display: none;">Sandbox</button>
+        <button id="play-multiplayer" style="display: none;">Multiplayer</button>
+        <button id="play-back">Back</button>
+    </div>
+    <div id="settings-menu" class="menu" style="display: none;">
+        <h1>Settings</h1>
+        <button id="settings-username">Change Username (Requires Refresh)</button>
+        <label for="settings-maxLights" id="settings-maxLights-label">Max Lights:</label>
+        <input id="settings-maxLights" type="range" min="1" max="100" value="10">
+        <label for="settings-sensitivity" id="settings-sensitivity-label">Sensitivity:</label>
+        <input id="settings-sensitivity" type="range" min="0.1" max="4" value="1" step="0.01">
+        <label for="settings-music" id="settings-music-label">Background Music Volume:</label>
+        <input id="settings-music" type="range" min="0" max="1" value="0.25" step="0.01">
+        <label for="settings-oreSound" id="settings-oreSound-label">Ore Sound/Music Volume:</label>
+        <input id="settings-oreSound" type="range" min="0" max="2" value="1" step="0.01">
+        <label for="settings-resolutionScale" id="settings-resolutionScale-label">Resolution Scale:</label>
+        <input id="settings-resolutionScale" type="range" min="0.1" max="2" value="1" step="0.01">
+        <button id="settings-shadows">Toggle Shadows</button>
+        <label for="settings-shadowMapSize" id="settings-shadowMapSize-label">Shadow Map Size:</label>
+        <input id="settings-shadowMapSize" type="range" min="6" max="12" value="11" step="1">
+        <button id="exportSave" style="display: none;">Export Save</button>
+        <button id="importSave" style="display: none;">Import Save</button>
+        <button id="resetBtn">Reset Progress</button>
+        <button id="settings-back">Back</button>
+        <span id="user-id"></span>
+    </div>
+    <div id="controls" class="menu" style="display: none;">
+        <h1>How to Play</h1>
+        <h2>Controls</h2>
+        <p>WASD - Move</p>
+        <p>Mouse - Look around</p>
+        <p>Left Click + Hold - Mine</p>
+        <p>Right Click - Place/use selected item</p>
+        <p>0-9 - Select hotbar item</p>
+        <p>E - Open inventory</p>
+        <p>F1 - Hide UI</p>
+        <p>Esc - Unlock cursor and toggle menus</p>
+        <h2>Objective</h2>
+        <p>Mine ores to collect resources, craft items, and dig as deep as possible.</p>
+        <button id="controls-back">Back</button>
+    </div>
+    <div id="credits-menu" class="menu" style="display: none;">
+        <h1>Credits</h1>
+        <p>Created by <a href="https://youtube.com/@tranquanto" target="_blank">Tranquanto</a></p>
+        <p>Heavily inspired by games such as <a href="https://www.roblox.com/games/11390231829" target="_blank">Malachite Miners 2</a>, <a href="https://www.roblox.com/games/7199514095" target="_blank">The Celestial Caverns</a>, <a href="https://www.roblox.com/games/8549934015" target="_blank">REx: Reincarnated</a>, etc.</p>
+        <p>Multiple soundtracks have been created by <a href="https://youtube.com/@startijer" target="_blank">startijer</a></p>
+        <p>Some ores have been created by other users; they have been credited in the ore wiki :3</p>
+        <br>
+        <p>Further details will be added in the future.</p>
+        <p>Thank you for playing!</p>
+        
+        <button id="credits-back">Back</button>
+    </div>
+    <div id="ui">
+        <div id="alerts"></div>
+        <div id="topLeft">
+            <progress id="health" value="100" max="100" class="health-bar"></progress><span id="healthText">100 HP</span><br>
+            <progress id="radiation" value="0" max="10" class="health-bar"></progress><span id="radiationText">0 Rads</span><br>
+            <span id="depth" class="info-label"></span>
+            <span id="position" class="info-label"></span>
+            <span id="power" class="info-label"></span>
+            <span id="time" class="info-label"></span>
+            <span id="music" class="info-label"></span>
+            <span id="totalOres" style="display: none;" class="section"></span>
+            <span id="weather" class="section"></span>
+        </div>
+        <div id="tooltip">
+            <span id="oreName">None</span><br>
+            <span id="oreRarity"></span><br>
+            <i><span id="oreDesc">N/A</span></i><br>
+            <span id="debugInfo"></span>
+            <span id="miningTime" style="display: none;">5.2 sec</span>
+            <progress id="mining-progress" value="0" max="100" style="display: none;"></progress>
+        </div>
+        <span id="equip-text" style="display: none;">Select a hotbar slot!</span>
+        <div id="hotbar">
+            <div id="hotbar-0" class="hotbar-item"></div>
+            <div id="hotbar-1" class="hotbar-item"></div>
+            <div id="hotbar-2" class="hotbar-item"></div>
+            <div id="hotbar-3" class="hotbar-item"></div>
+            <div id="hotbar-4" class="hotbar-item"></div>
+            <div id="hotbar-5" class="hotbar-item"></div>
+            <div id="hotbar-6" class="hotbar-item"></div>
+            <div id="hotbar-7" class="hotbar-item"></div>
+            <div id="hotbar-8" class="hotbar-item"></div>
+            <div id="hotbar-9" class="hotbar-item"></div>
+        </div>
+        <div id="cursor"></div>
+        <div id="inventory" style="display: none;"></div>
+        <div id="index-btn">Index</div>
+        <div id="indexes" style="display: none;" class="index-list">
+            <div id="ore-wiki-btn" class="item">
+                <span class="item-name">Ores</span>
+                <img src="img/item/copperPickaxe.png" class="item-count">
+            </div>
+            <!-- <div id="item-wiki-btn" class="item soon">
+                <span class="item-name">Items (Soon)</span>
+                <img src="img/item/plastic.png" class="item-count">
+            </div>
+            <div id="layer-wiki-btn" class="item soon">
+                <span class="item-name">Layers (Soon)</span>
+                <img src="img/item/surfaceTeleporter.png" class="item-count">
+            </div>
+            <div id="biome-wiki-btn" class="item soon">
+                <span class="item-name">Biomes (Soon)</span>
+                <img src="img/item/permafrost.png" class="item-count">
+            </div> -->
+            <div id="achievements-btn" class="item">
+                <span class="item-name">Achievements</span>
+                <img src="img/item/trophy.png" class="item-count">
+            </div>
+        </div>
+        <div id="inventoryNotif"></div>
+        <div id="ore-wiki-list" class="index-list"></div>
+        <div id="item-wiki-list" class="index-list"></div>
+        <div id="layer-wiki-list" class="index-list"></div>
+        <div id="biome-wiki-list" class="index-list"></div>
+        <div id="achievements-list" class="index-list"></div>
+        <div id="dpad" style="display: none;">
+            <div id="dpad-up" class="dpad-button dpad-wasd">&lt;</div>
+            <div id="dpad-left" class="dpad-button dpad-wasd">&lt;</div>
+            <div id="dpad-right" class="dpad-button dpad-wasd">&gt;</div>
+            <div id="dpad-down" class="dpad-button dpad-wasd">&lt;</div>
+            <div id="dpad-jump" class="dpad-button dpad-wasd">&lt;&gt;</div>
+            <div id="dpad-top-row">
+                <div id="pause-button" class="dpad-button">&#10074; &#10074;</div>
+                <div id="dpad-inventory" class="dpad-button">Inv</div>
+                <div id="dpad-fullscreen" class="dpad-button">⛶</div>
+                <div id="dpad-console" class="dpad-button" style="display: none;">Con</div>
+            </div>
+        </div>
+    </div>
+    <div id="big-gui" class="gui" style="display: none;"></div>
+    <div id="ore-info"></div>
+    <div id="ore-wiki"></div>
+    <div id="inventoryNotif"></div>
+    <div id="large-inventory" style="display: none;"></div>
+    <audio id="bgm" src="audio/layers/surface.mp3" loop></audio>
+    <canvas id="canvas"></canvas>
+    <script src="js/babylon.js"></script>
+    <script src="js/external.js"></script>
+    <script src="js/numberName.js"></script>
+    <script src="js/main.js" type="module"></script>
+    <script src="js/menus.js" type="module"></script>
+</body>
+</html>

@@ -1,0 +1,1137 @@
+/* Copyright 2025 Aston Gillen. All rights reserved. */
+
+@import url('https://fonts.googleapis.com/css2?family=Silkscreen:wght@400;700&display=swap');
+
+@keyframes alert {
+    0% {
+        opacity: 0;
+    }
+    5% {
+        opacity: 1;
+    }
+    95% {
+        opacity: 1;
+    }
+    100% {
+        opacity: 0;
+        visibility: hidden;
+    }
+}
+
+@keyframes fadeOut {
+    0% {
+        opacity: 1;
+    }
+    100% {
+        opacity: 0;
+        transform: translateX(100%);
+        visibility: hidden;
+    }
+}
+
+@keyframes initLogo {
+    0% {
+        top: 50dvh;
+        transform: scale(0) translateY(-50%);
+        filter: opacity(0);
+    }
+    20% {
+        top: 50dvh;
+        transform: scale(0) translateY(-50%);
+        filter: opacity(0);
+    }
+    50% {
+        top: 50dvh;
+        transform: scale(1.5) translateY(-50%);
+        filter: opacity(1);
+    }
+    75% {
+        top: 50dvh;
+        transform: scale(1.5) translateY(-50%);
+        filter: opacity(1);
+    }
+    100% {
+        top: 0;
+        transform: scale(1);
+        filter: opacity(1) drop-shadow(0 0 16px #00f) drop-shadow(0 0 8px #90f);
+    }
+}
+
+@keyframes initMask {
+    0% {
+        opacity: 1;
+    }
+    60% {
+        opacity: 1;
+    }
+    100% {
+        opacity: 0;
+    }
+}
+
+@keyframes damageVignetteAnim {
+    0% {
+        opacity: 1;
+    }
+    100% {
+        opacity: 0;
+    }
+}
+
+html {
+    height: 100dvh;
+}
+
+body {
+    padding: 0;
+    margin: 0;
+    font-family: Silkscreen, monospace, sans-serif;
+    font-size: 2vh;
+    color: #fff;
+    overscroll-behavior-y: contain;
+    user-select: none;
+    -webkit-user-select: none;
+    -webkit-touch-callout: none;
+    touch-action: none;
+}
+
+* {
+    font-family: inherit;
+}
+
+.fullsize {
+    width: 100vw;
+    text-align: center;
+}
+
+#logo {
+    width: 50vw;
+    height: auto;
+    margin: 1dvh auto;
+    position: relative;
+    filter: opacity(0);
+    transform-origin: top;
+}
+
+#logo-container {
+    position: fixed;
+    top: 0;
+    left: 0;
+    z-index: 10002;
+    pointer-events: none;
+}
+
+#menu-mask {
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100vw;
+    height: 100dvh;
+    background: rgba(0, 0, 0);
+    z-index: 10001;
+    animation-fill-mode: forwards;
+    pointer-events: none;
+}
+
+#canvas {
+    z-index: -99999;
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100vw;
+    height: 100dvh;
+}
+
+.overlay {
+    z-index: -9998;
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100vw;
+    height: 100dvh;
+    pointer-events: none;
+}
+
+#damageVignette {
+    z-index: -9997;
+    background: radial-gradient(ellipse at center, transparent 40%, #f00a);
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100vw;
+    height: 100dvh;
+    pointer-events: none;
+    opacity: 0;
+}
+
+#nightVisionOverlay {
+    opacity: 0.1;
+    display: none;
+}
+
+#links {
+    text-align: left;
+    position: fixed;
+    bottom: 0.8vw;
+    left: 0.8vw;
+    font-size: 1.2vw;
+    line-height: 1.2vw;
+}
+
+#links a {
+    display: inline-block;
+    width: 2vw;
+    height: 2vw;
+    margin-right: 0.5vw;
+}
+
+#links a > img {
+    width: 100%;
+    height: 100%;
+    /* force white icons */
+    filter: invert(1) sepia(1) grayscale(1) brightness(200%);
+}
+
+#links a:hover > img {
+    filter: invert(1) sepia(1) grayscale(1) brightness(200%) drop-shadow(0 0 0.5vw #00f) drop-shadow(0 0 0.25vw #00f);
+}
+
+#version {
+    display: block;
+    margin-top: 0.5vw;
+}
+
+.menu {
+    position: fixed;
+    width: 100vw;
+    height: 100dvh;
+    top: 0;
+    left: 0;
+    z-index: 10000;
+    /* background-image: url(img/ss.png); */
+    background-size: cover;
+    background-position: center;
+    padding: 0.5vw;
+    padding-top: calc(10.75vw + 1dvh);
+    box-sizing: border-box;
+    text-align: center;
+    overflow-y: auto;
+}
+
+.menu::before {
+    content: "";
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    background-color: #0008;
+    pointer-events: none;
+    z-index: -1;
+}
+
+.menu a {
+    color: #fff;
+}
+
+.menu a:hover {
+    color: #caf;
+}
+
+.menu > button, .menuButton {
+    display: block;
+    margin: 0.5vw auto;
+    width: 50%;
+    height: 5vw;
+    font-size: min(4vh, 2vw);
+    border: 0.25vw solid #000;
+    background: #fff;
+    padding: 0.25vw;
+    cursor: pointer;
+}
+
+.menu > button:hover, .menuButton:hover {
+    border: 0.25vw solid #fff;
+}
+
+.menu > button:active, .menuButton:active {
+    background: #000;
+    color: #fff;
+}
+
+.menu > button:disabled, .menuButton:disabled {
+    background: #666;
+    color: #ccc;
+    border: 0.25vw solid #444;
+    cursor: not-allowed;
+}
+
+#resetBtn {
+    background: #f00;
+    color: #600;
+    border: 0.25vw solid #800;
+}
+
+#resetBtn:hover {
+    background: #c00;
+    border: 0.25vw solid #f88;
+}
+
+#resetBtn:active {
+    color: #f00;
+    background: #200;
+}
+
+.menu ul {
+    text-align: left;
+    width: 25vw;
+    margin: 0 auto;
+}
+
+.menu ul li {
+    margin-top: 0.5vw;
+}
+
+.menu label {
+    display: block;
+    margin-bottom: 0.5vw;
+    font-size: min(4vh, 2vw);
+}
+
+.menu input[type=range] {
+    -webkit-appearance: none;
+    appearance: none;
+    width: 50%;
+    height: 0.5vw;
+    background: #444;
+    border-radius: 0;
+    border: 0.1vw solid #fff;
+    outline: none;
+}
+
+.menu input[type=range]::-webkit-slider-thumb {
+    -webkit-appearance: none;
+    appearance: none;
+    width: 1vw;
+    height: 1vw;
+    background: #fff;
+    border: 0.1vw solid #000;
+    border-radius: 0;
+    cursor: pointer;
+}
+
+#loadingScreen {
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    background-color: #000;
+    color: white;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    font-size: 5vh;
+    z-index: 100000;
+}
+
+#cursor {
+    position: fixed;
+    width: 0.3vw;
+    height: 0.3vw;
+    border: 0.2vw solid #000;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+    background-color: #fff;
+    pointer-events: none;
+}
+
+#tooltip {
+    position: fixed;
+    bottom: 5vw;
+    left: 50%;
+    transform: translateX(-50%);
+    width: 70%;
+    height: 30dvh;
+    text-align: center;
+    padding: 0.5vw;
+    text-shadow: 0 0 2px #000;
+    filter: drop-shadow(0 0 2px #000);
+    pointer-events: none;
+    user-select: none;
+}
+
+#tooltip > br {
+    line-height: 1.5;
+}
+
+#oreName {
+    font-size: min(7vh, 4vw);
+    color: transparent;
+    background-clip: text;
+    filter: drop-shadow(0 0 #fff);
+}
+
+#mining-progress {
+    border-radius: 0;
+    height: 2dvh;
+    width: calc(100% - 32vw);
+    position: absolute;
+    bottom: 1dvh;
+    left: 16vw;
+}
+
+#miningTime {
+    position: absolute;
+    bottom: 4dvh;
+    left: 50%;
+    transform: translateX(-50%);
+    font-size: 1.5vh;
+}
+
+#mining-progress::-webkit-progress-bar {
+    background-color: #222;
+    border-radius: 0;
+    border: 0.1vw solid #000;
+}
+
+#mining-progress::-webkit-progress-value {
+    background: var(--color, #888);
+    background-size: var(--size);
+    border-radius: 0;
+}
+
+#hotbar {
+    position: fixed;
+    bottom: 0;
+    left: 50%;
+    transform: translateX(-50%);
+    z-index: 4;
+    width: 100%;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    flex-direction: row;
+    pointer-events: none;
+}
+
+#equip-text {
+    position: fixed;
+    bottom: calc(10vw + 1dvh);
+    font-size: 6vh;
+    left: 50%;
+    transform: translateX(-50%);
+    text-shadow: #000 0 0 2px;
+}
+
+.hotbar-item {
+    width: 4vw;
+    height: 4vw;
+    border: 0.1vw solid #000;
+    clip-path: polygon(0 7.5%, 7.5% 7.5%, 7.5% 0, 92.5% 0, 92.5% 7.5%, 100% 7.5%, 100% 92.5%, 92.5% 92.5%, 92.5% 100%, 7.5% 100%, 7.5% 92.5%, 0 92.5%);
+    background-color: #0008;
+    background-size: auto 3.6vw, auto auto;
+    background-repeat: no-repeat;
+    background-position: center;
+    image-rendering: pixelated;
+    margin: 0.25vw;
+    cursor: pointer;
+    box-sizing: border-box;
+    pointer-events: all;
+}
+
+.big .hotbar-item {
+    width: 8vw;
+    height: 8vw;
+    background-size: auto 7.2vw, auto auto;
+}
+
+.hotbar-item-selected {
+    border: 0.125vw solid #0f0;
+}
+
+.hotbar-item-count {
+    position: absolute;
+    right: 0.25vw;
+    bottom: 0.25vw;
+    font-size: 1.5vh;
+    text-shadow: 0 0 0.25vw #000;
+}
+
+.big .hotbar-item-count {
+    font-size: 3vh;
+}
+
+.hotbar-item > div {
+    position: relative;
+    width: 100%;
+    height: 100%;
+}
+
+#hotbar * {
+    transition: width 0.25s ease-in-out, height 0.25s ease-in-out, background-size 0.25s ease-in-out, font-size 0.25s ease-in-out;
+}
+
+#inventory {
+    z-index: 2;
+    position: absolute;
+    bottom: 0;
+    left: 0;
+    /* max-height: 4dvh; */
+    overflow-y: auto;
+    transition: max-height 0.5s ease-in-out;
+    max-height: 4dvh;
+}
+
+#inventory:hover {
+    max-height: 75dvh;
+}
+
+.item, #inventory > button {
+    box-sizing: border-box;
+    width: 15vw;
+    min-height: 4dvh;
+    border: 0.1vw solid black;
+    position: relative;
+    background-size: 100%;
+    image-rendering: pixelated;
+    padding: 0.25vw;
+}
+
+#index-btn {
+    position: absolute;
+    top: 0;
+    right: 0;
+    width: 10vw;
+    height: 4dvh;
+    background: #000;
+    color: #fff;
+    text-align: center;
+    line-height: 4dvh;
+}
+
+#index-btn:hover {
+    background: #333;
+    cursor: pointer;
+}
+
+.divider {
+    text-align: center;
+    font-size: 2vh;
+}
+
+.strikethrough {
+    text-decoration: line-through;
+    text-decoration-color: #fff;
+    text-decoration-thickness: 0.2vw;
+}
+
+.item-name {
+    white-space: nowrap;
+    position: absolute;
+    top: 50%;
+    transform: translateY(-50%);
+    text-shadow: 0 0 2px #000;
+    filter: drop-shadow(0 0 4px #000);
+}
+
+.item-count {
+    position: absolute;
+    right: 0.25vw;
+    top: 50%;
+    transform: translateY(-50%);
+    height: 4dvh;
+}
+
+.achievement-desc {
+    display: block;
+    font-size: 1.5vh;
+}
+
+#topLeft {
+    position: absolute;
+    top: 0.4vw;
+    left: 0.4vw;
+    text-shadow: 0 0 2px #000;
+    filter: drop-shadow(0 0 2px #000);
+}
+
+#topLeft > span.info-label {
+    display: block;
+}
+
+#topLeft > span.section {
+    display: block;
+    margin-top: 2dvh;
+}
+
+.health-bar {
+    width: 20vw;
+    height: 2dvh;
+    background-color: #000;
+    border: 0.1vw solid #000;
+    box-sizing: border-box;
+    margin-bottom: 0.5dvh;
+    vertical-align: middle;
+}
+
+.health-bar::-webkit-progress-bar {
+    background-color: #444;
+    border-radius: 0;
+}
+
+.health-bar::-webkit-progress-value {
+    background-color: #f00;
+    border-radius: 0;
+}
+
+#radiation::-webkit-progress-value {
+    background-color: #af0;
+}
+
+#radiation.danger::-webkit-progress-value {
+    background-color: #ff0;
+}
+
+#healthText, #radiationText {
+    margin-left: 0.5vw;
+}
+
+#ore-info {
+    text-align: center;
+    width: 75%;
+    pointer-events: none;
+    position: absolute;
+    bottom: 10%;
+    left: 50%;
+    transform: translateX(-50%);
+    z-index: 3;
+}
+
+#large-inventory {
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    width: 70vw;
+    height: min(80dvh, 100dvh - 10vw);
+    transform: translate(-50%, -50%);
+    z-index: 18;
+    background: #435;
+    padding: 0.5vw 8vw;
+    text-align: center;
+    overflow-y: scroll;
+}
+
+#large-inventory::-webkit-scrollbar {
+    width: 0;
+}
+
+#large-inventory-recipes {
+    min-height: 70dvh;
+}
+
+#large-inventory input {
+    width: 100%;
+    padding: 0.5vw;
+    box-sizing: border-box;
+    text-align: center;
+    font-size: 2vh;
+    background: #0008;
+    color: inherit;
+    outline: none;
+}
+
+.gui input {
+    width: 100%;
+    padding: 0.5vw;
+    box-sizing: border-box;
+    text-align: center;
+    font-size: 2vh;
+    background: #0008;
+    color: inherit;
+    outline: none;
+}
+
+.large-inventory-header {
+    font-size: 4vh;
+    text-decoration: underline;
+}
+
+.large-item {
+    width: 8vw;
+    height: 6vw;
+    border: 1px solid #000;
+    image-rendering: pixelated;
+    background-size: auto 90%, auto auto;
+    background-position: center;
+    background-repeat: no-repeat;
+    position: relative;
+    font-size: 0.8vw;
+    display: inline-block;
+    text-align: center;
+    cursor: pointer;
+    margin: 0.25vw;
+}
+
+.large-item::after {
+    content: "";
+    margin: 0.25vw;
+    padding: 0.5vw;
+    box-sizing: border-box;
+}
+
+.large-item:hover {
+    border: 1px solid #fff;
+}
+
+.large-item-name {
+    position: absolute;
+    top: 0;
+    left: 50%;
+    transform: translateX(-50%);
+    width: 88%;
+    text-shadow: 0 0 0.25vw #000;
+    filter: drop-shadow(0 0 0.25vw #000);
+}
+
+.large-item-count {
+    position: absolute;
+    right: 0.25vw;
+    bottom: 0.25vw;
+    text-shadow: 0 0 0.25vw #000;
+    filter: drop-shadow(0 0 0.25vw #000);
+}
+
+.large-recipe-inputs {
+    position: absolute;
+    left: 0;
+    top: 50%;
+    transform: translateY(-50%);
+    transition: all 0.5s ease-in-out;
+    padding: 0;
+    opacity: 0;
+    width: max-content;
+    z-index: 19;
+    pointer-events: none;
+    font-size: 0.9vh;
+}
+
+.line-below {
+    padding-bottom: 2dvh;
+    margin-bottom: 2dvh;
+    border-bottom: 0.2vw solid #fff8;
+}
+
+.large-recipe:hover > .large-recipe-inputs, .large-item:hover > .large-recipe-inputs {
+    background: #000;
+    opacity: 1;
+    left: 50%;
+    top: 50%;
+    transform: translate(-50%, -50%) scale(2);
+    padding: 0.5vw;
+}
+
+.wikiOreTier > .large-recipe-inputs {
+    transition: all 0.25s ease-in-out;
+}
+
+.wikiOreTier:hover > .large-recipe-inputs {
+    background: #000;
+    opacity: 1;
+    right: 1vw;
+    top: 50%;
+    transform: translateY(-50%) scale(2);
+    padding: 0.5vw;
+}
+
+.hoverable {
+    cursor: pointer;
+}
+
+.hoverable:hover {
+    text-decoration: underline;
+}
+
+.index-list {
+    display: none;
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+    z-index: 4;
+    max-height: 90dvh;
+    overflow-y: scroll;
+    border: 1vw solid #000;
+}
+
+.index-list > .item {
+    width: 30vw;
+    cursor: pointer;
+    border: 1px solid #000;
+    box-sizing: content-box;
+}
+
+.index-list > .soon {
+    filter: saturate(0.5) brightness(0.7);
+    cursor: not-allowed;
+}
+
+.index-list::-webkit-scrollbar {
+    width: 0;
+}
+
+.index-list > .item:not(.soon):hover {
+    border: 1px solid #fff;
+}
+
+#achievements-list > .item {
+    min-height: 8dvh;
+    width: 60dvw;
+    cursor: default;
+    background: linear-gradient(to right, #c83 0%, #c83 var(--progress, 0%), #333 var(--progress, 0%), #333 100%);
+}
+
+#achievements-list > .item > .item-name {
+    left: 2dvh;
+}
+
+#achievements-list > .item > .item-count {
+    min-height: 6dvh;
+    right: 2dvh;
+}
+
+#achievements-list > .item.unlocked {
+    background: linear-gradient(#0f0, #3a3);
+}
+
+#achievements-list > .item:hover {
+    border: 1px solid #000;
+}
+
+#ore-wiki-btn {
+    background: linear-gradient(#ad2020, #ceb130);
+}
+
+#item-wiki-btn {
+    background: linear-gradient(#ce3091, #ff8282);
+}
+
+#layer-wiki-btn {
+    background: linear-gradient(#666, #aaa);
+}
+
+#biome-wiki-btn {
+    background: linear-gradient(#74dcff, #cdebff);
+}
+
+#achievements-btn {
+    background: linear-gradient(#fc0, #ff8);
+}
+
+#ore-wiki, .gui {
+    position: absolute;
+    width: 80vw;
+    height: 80dvh;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+    z-index: 19;
+    background: #333;
+    display: none;
+    padding: 0.5vw;
+    overflow-y: auto;
+    border: 0.1vw solid #fff;
+    text-align: center;
+}
+
+.gui > .menuButton {
+    width: 100%;
+    height: 5.5dvh;
+    font-size: 3vh;
+    margin: 0.5vw 0;
+    padding: 0 0.25vw;
+}
+
+.gui > .halfWidth {
+    width: calc(100% / var(--columns, 2));
+    display: inline-block;
+}
+
+.closeButton {
+    position: absolute;
+    top: 0.5vw;
+    right: 0.5vw;
+    width: 2vw;
+    height: 2vw;
+    font-size: 4vh;
+    cursor: pointer;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    vertical-align: middle;
+    z-index: 20;
+}
+
+.closeButton:hover {
+    color: #f00;
+}
+
+.wikiName {
+    display: block;
+    text-align: center;
+    font-size: 4vh;
+    margin: 0.5vw;
+    filter: drop-shadow(0 0 0.15vw #fff);
+}
+
+#ore-wiki .wikiName, .recipeGUI.wikiName {
+    display: inline-block;
+    position: absolute;
+    left: 50%;
+    transform: translateX(-50%);
+    white-space: nowrap;
+}
+
+.wikiText {
+    display: block;
+}
+
+.wikiGraph {
+    border: 0.1vw solid #fff;
+    position: absolute;
+    top: 50%;
+    left: min(6vw, 12dvh);
+    transform: translateY(-50%);
+}
+
+.wikiGraphTooltip {
+    position: absolute;
+    pointer-events: none;
+    background: #0006;
+    color: #fff;
+    padding: 0.5vw 1vw;
+    border-radius: 1dvh;
+    font-size: 1vw;
+    display: none;
+    z-index: 1000;
+}
+
+.wikiTexture, .wikiOreTexture {
+    image-rendering: pixelated;
+    display: block;
+    float: right;
+    width: min(16vw, 32dvh);
+    margin: calc(5dvh + 1vw) 0 0 1vw;
+    filter: opacity(0.3) drop-shadow(0 0 0 var(--color)) drop-shadow(0 0 0 var(--color)) drop-shadow(0 0 0 var(--color)) drop-shadow(0 0 0 var(--color));
+}
+
+.wikiOreTexture {
+    background-image: url(img/block/shale.png);
+    background-size: 100%;
+}
+
+img {
+    image-rendering: pixelated;
+}
+
+.wikiVariousText {
+    position: absolute;
+    bottom: 1vw;
+    right: 1vw;
+    width: 45%;
+    text-align: right;
+}
+
+.maxDepthText {
+    position: absolute;
+    bottom: 5dvh;
+    left: calc(min(6vw, 12dvh) - 0.5vw);
+    width: 32.5vw;
+    text-align: right;
+}
+
+.minDepthText {
+    position: absolute;
+    bottom: 5dvh;
+    left: calc(min(6vw, 12dvh) + 0.5vw);
+    text-align: left;
+}
+
+.minChanceText, .maxChanceText {
+    display: flex;
+    position: absolute;
+    text-align: center;
+    justify-content: center;
+    left: 0;
+    width: calc(min(6vw, 12dvh) - 0.5vw);
+    padding: 0.25vw;
+}
+
+.minChanceText {
+    top: 50%;
+    transform: translateY(-50%);
+}
+
+.maxChanceText {
+    bottom: 50%;
+    align-items: flex-end;
+    transform: translateY(50%);
+}
+
+#alerts {
+    position: fixed;
+    text-align: center;
+    z-index: 10;
+    width: 100%;
+    pointer-events: none;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+}
+
+.alert {
+    text-align: center;
+    border-style: solid;
+    border-width: 0.125vw;
+    border-color: #000;
+    background: #333a;
+    padding: 0.25vw;
+    margin: 0.25vw;
+    width: 50%;
+    min-height: 4dvh;
+    line-height: 4dvh;
+    font-size: 2vh;
+    animation: alert 5s ease-in-out;
+    animation-fill-mode: forwards;
+}
+
+#inventoryNotif {
+    z-index: 2;
+    position: absolute;
+    bottom: 0;
+    right: 0;
+    max-height: 75dvh;
+    overflow-y: auto;
+    overflow-x: hidden;
+}
+
+#inventoryNotif > .item {
+    animation: fadeOut 0.5s linear;
+    animation-delay: 5s;
+    animation-iteration-count: 1;
+    animation-fill-mode: forwards;
+}
+
+#dpad {
+    position: fixed;
+    bottom: 10px;
+    left: 10px;
+    width: 16vw;
+    height: 16vw;
+    z-index: 4;
+    user-select: none;
+    -webkit-tap-highlight-color: transparent;
+}
+
+.dpad-button {
+    width: 5vw;
+    height: 5vw;
+    border: 0.1vw solid #000;
+    background: #000;
+    text-align: center;
+    cursor: pointer;
+    font-size: 2vh;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    vertical-align: middle;
+}
+
+.dpad-wasd {
+    font-size: 3vh;
+}
+
+#dpad-up {
+    position: absolute;
+    top: 0;
+    left: 50%;
+    transform: translateX(-50%) rotate(90deg);
+}
+
+#dpad-down {
+    position: absolute;
+    bottom: 0;
+    left: 50%;
+    transform: translateX(-50%) rotate(-90deg);
+}
+
+#dpad-left {
+    position: absolute;
+    left: 0;
+    top: 50%;
+    transform: translateY(-50%);
+}
+
+#dpad-right {
+    position: absolute;
+    right: 0;
+    top: 50%;
+    transform: translateY(-50%);
+}
+
+#dpad-jump {
+    position: fixed;
+    bottom: 4vw;
+    right: 4vw;
+    transform: translate(-50%, -50%);
+    width: 6vw;
+    height: 6vw;
+}
+
+#dpad-top-row {
+    position: fixed;
+    top: 0.5dvh;
+    left: 50%;
+    transform: translateX(-50%);
+}
+
+#dpad-top-row > .dpad-button {
+    width: 6vw;
+    height: 2vw;
+    display: inline-flex;
+}
+
+#user-id {
+    position: absolute;
+    left: 50%;
+    transform: translateX(-50%);
+    user-select: text;
+    padding-bottom: 1dvh;
+}
+
+#changelog > ul {
+    padding-bottom: 1vw;
+    border-bottom: 0.1vw solid #fff;
+}
+
+input::-webkit-outer-spin-button,
+input::-webkit-inner-spin-button {
+    appearance: none;
+    margin: 0;
+}
+
+.gui textarea {
+    position: relative;
+    display: block;
+    width: 80%;
+    height: 40dvh;
+    left: 10%;
+    margin: 1dvh 0;
+    background: #0008;
+    color: #fff;
+    resize: none;
+    padding: 0;
+    outline: none;
+    font-family: monospace;
+}

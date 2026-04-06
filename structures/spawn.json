@@ -1,0 +1,112 @@
+{
+  "key": {
+    " ": "air",
+    "-": null,
+    "e": "marble",
+    "r": "basalt",
+    "t": "carpet",
+    "y": "lightBox",
+    "u": "glass",
+    "i": "pegmatite"
+  },
+  "layout": [
+    [
+      "eeeeeeeeee",
+      "etttttttte",
+      "etuuuuuute",
+      "ettttttute",
+      "iiiitttute",
+      "i  itttute",
+      "i  itttute",
+      "iiiitttute",
+      "ettttttute",
+      "etuuuuuute",
+      "etttttttte",
+      "eeeeeeeeee"
+    ],
+    [
+      "eeeeeeeeee",
+      "e        e",
+      "e        e",
+      "e        e",
+      "e        e",
+      "e        e",
+      "e        e",
+      "e        e",
+      "e        e",
+      "e        e",
+      "e        e",
+      "eeeeeeeeee"
+    ],
+    [
+      "eeeeeeeeee",
+      "e        e",
+      "e        e",
+      "e        e",
+      "e        e",
+      "e        e",
+      "e        e",
+      "e        e",
+      "e        e",
+      "e        e",
+      "e        e",
+      "eeeeeeeeee"
+    ],
+    [
+      "eeeeeeeeee",
+      "e        e",
+      "e        e",
+      "e        e",
+      "e        e",
+      "e        e",
+      "e        e",
+      "e        e",
+      "e        e",
+      "e        e",
+      "e        e",
+      "eeeeeeeeee"
+    ],
+    [
+      "eeeeeeeeee",
+      "e        e",
+      "e        e",
+      "e        e",
+      "e        e",
+      "e        e",
+      "e        e",
+      "e        e",
+      "e        e",
+      "e        e",
+      "e        e",
+      "eeeeeeeeee"
+    ],
+    [
+      "eeeeeeeeee",
+      "e        e",
+      "e        e",
+      "e        e",
+      "e        e",
+      "e        e",
+      "e        e",
+      "e        e",
+      "e        e",
+      "e        e",
+      "e        e",
+      "eeeeeeeeee"
+    ],
+    [
+      "eeeeeeeeee",
+      "errrrrrrre",
+      "eryrrrryre",
+      "errrrrrrre",
+      "errrrrrrre",
+      "errrrrrrre",
+      "errrrrrrre",
+      "errrrrrrre",
+      "errrrrrrre",
+      "eryrrrryre",
+      "errrrrrrre",
+      "eeeeeeeeee"
+    ]
+  ]
+}

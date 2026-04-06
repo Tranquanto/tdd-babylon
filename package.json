@@ -1,0 +1,13 @@
+{
+  "name": "babylon-test",
+  "version": "1.0.0",
+  "description": "babylon test thing",
+  "dependencies": {
+    "babylonjs": "^9.1.0",
+    "three": "^0.183.0"
+  },
+  "devDependencies": {
+    "vite": "^8.0.3",
+    "@types/three": "^0.183.0"
+  }
+}

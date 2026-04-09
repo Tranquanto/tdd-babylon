@@ -1,5 +1,5 @@
 import vars from "./vars.js";
-import { ores, layers, perLayerOreArray, getLayer, deathMessages } from "./content/items.js";
+import { ores, layers, perLayerOreArray, getLayer } from "./content/items.js";
 import { rand01, heightMapNoise, heightMapNoiseLarge, heightMapMountain, heightMapMountainLarge, BIOME_INTERVAL } from "./perlin.js";
 import { isCave } from "./noise.js";
 

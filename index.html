@@ -85,11 +85,15 @@
         
         <button id="credits-back">Back</button>
     </div>
+    <img id="nightVisionOverlay" src="img/block/cloud.png" class="overlay" style="display: none;">
+    <img id="noiseOverlay" src="img/overlay/noise.gif" class="overlay" style="opacity: 0;">
+    <div id="damageVignette"></div>
     <div id="ui">
         <div id="alerts"></div>
         <div id="topLeft">
             <progress id="health" value="100" max="100" class="health-bar"></progress><span id="healthText">100 HP</span><br>
             <progress id="radiation" value="0" max="10" class="health-bar"></progress><span id="radiationText">0 Rads</span><br>
+            <span id="fps" class="info-label">FPS: 60</span>
             <span id="depth" class="info-label"></span>
             <span id="position" class="info-label"></span>
             <span id="power" class="info-label"></span>
@@ -176,5 +180,6 @@
     <script src="js/numberName.js"></script>
     <script src="js/main.js" type="module"></script>
     <script src="js/menus.js" type="module"></script>
+    <script src="js/post-itemlist.js" type="module"></script>
 </body>
 </html>

@@ -29,9 +29,17 @@ export function noise(x, y, z, seed, cave = caveNoise, caveSmall = caveNoiseSmal
     return {value: a, caveReq: layers[layer].caveReq || MIN_CAVE_REQ};
 }
 
+const isCaveCache = new Set();
+const notCaveCache = new Set();
 export function isCave(x, y, z, ...args) {
+    const k = `${x},${y},${z}`;
+    if (isCaveCache.has(k)) return true;
+    if (notCaveCache.has(k)) return false;
     const n = noise(x, y, z, ...args);
-    return n.value > n.caveReq;
+    const result = n.value > n.caveReq;
+    if (result) isCaveCache.add(k);
+    if (!result) notCaveCache.add(k);
+    return result;
 }
 
 export function caveWallAdjacent(x, y, z, ...args) {

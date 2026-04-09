@@ -1,4 +1,5 @@
 import { seed, caveNoise, caveNoiseSmall, CAVE_SIZE, MIN_CAVE_REQ } from "./perlin.js";
+import { deathMessages } from "./content/deathMessages.js";
 
 const vars = {
     version: "0.7.0.5a",
@@ -8,7 +9,8 @@ const vars = {
     itemMultiplier: 1,
     fly: false,
     player: {
-        position: {x: 0, y: 0, z: 0},
+        /** @type {BABYLON.Vector3} */
+        position: {x: 0, y: 6, z: 0},
         moveSpeed: 0.1,
         baseMoveSpeed: 0.1,
         velocity: {x: 0, y: 0, z: 0},

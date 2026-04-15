@@ -1,8 +1,12 @@
+import Color from "https://colorjs.io/dist/color.js";
+
 import vars from "./vars.js";
-import { getOre, m, oreAt, checkAdjacent } from "./outside_stuff.js";
-import { getLayer, layers, locations, ores } from "./content/items.js";
+import { getOre, m, oreAt, checkAdjacent, calculatePower, airAt, calculateRarity, chunks, getBGOre } from "./outside_stuff.js";
+import { getLayer, items, layers, locations, ores, structureArray, structures, tiers, traits } from "./content/items.js";
 import { biomes, topLayer } from "./content/layers.js";
-import { isCave, CHUNK3_RATE, CHUNK_SIZE_3, CHUNK_SIZE } from "./noise.js";
+import { isCave, CHUNK3_RATE, CHUNK_SIZE_3, CHUNK_SIZE, noise } from "./noise.js";
+import { inventory, unlockAchievement } from "./inventory.js";
+import { rand01 } from "./perlin.js";
 
 const { player, stats, camera } = vars;
 
@@ -15,10 +19,14 @@ let MAX_MESH_COUNT = 1000;
 let STARTED = true;
 let LAST_FRAME = performance.now(); // for FPS calculation
 let FRAME_TIME = 0;
+let MINING = false;
+let LAST_ORE = [], CURRENT_ORE = [];
 let CURRENT_LAYER, INITIALIZED_LAYER = false;
 let generatingChunks = [], generatingChunks3 = [], priorityChunks3 = new Set(), generatedChunks = new Set(), GENERATION_DISTANCE = 64;
-let lightArr = [];
+let generatedStructures = {};
+let lightArr = [], radArr = [], repairArr = [], repairObj = {}, lightKeys = {};
 let USE_THIN_INSTANCES = true;
+let totalOres = 0;
 
 function resize() {
     canvas.width = window.innerWidth;
@@ -36,12 +44,14 @@ perspectiveCamera.maxZ = 1000;
 perspectiveCamera.minZ = 0.1;
 perspectiveCamera.fov = 1.2;
 scene.fogEnabled = true;
+scene.fogDensity = 0.01;
+scene.fogMode = BABYLON.Scene.FOGMODE_EXP2;
 
 const raycaster = new BABYLON.Ray(new BABYLON.Vector3(), new BABYLON.Vector3());
 raycaster.length = 1000;
 
 // rendering pipeline
-const pipeline = new BABYLON.DefaultRenderingPipeline("pipeline", true, scene, [perspectiveCamera]);
+const pipeline = new BABYLON.DefaultRenderingPipeline("pipeline", false, scene, [perspectiveCamera]);
 pipeline.bloomEnabled = true;
 pipeline.fxaaEnabled = true;
 pipeline.fxaa.samples = 4;
@@ -95,6 +105,91 @@ document.addEventListener("keydown", event => {
         case 'Space':
         keys['jump'] = true;
         break;
+        case 'KeyE':
+        toggleInventory();
+        break;
+        case 'Escape':
+        if (document.getElementById("ore-wiki").style.display === "block") {
+            document.getElementById("ore-wiki").style.display = "none";
+        } else if (document.getElementById("big-gui").style.display === "block") {
+            document.getElementById("big-gui").style.display = "none";
+            document.getElementById("big-gui").style.width = "";
+        } else if (document.getElementById("large-inventory").style.display === "block") {
+            document.getElementById("large-inventory").style.display = "none";
+        } else if (document.getElementById("indexes").style.display === "block") {
+            document.getElementById("indexes").style.display = "none";
+        } else if (document.getElementById("ore-wiki-list").style.display === "block") {
+            document.getElementById("ore-wiki-list").style.display = "none";
+        } else if (document.getElementById("item-wiki-list").style.display === "block") {
+            document.getElementById("item-wiki-list").style.display = "none";
+        } else if (document.getElementById("layer-wiki-list").style.display === "block") {
+            document.getElementById("layer-wiki-list").style.display = "none";
+        } else if (document.getElementById("biome-wiki-list").style.display === "block") {
+            document.getElementById("biome-wiki-list").style.display = "none";
+        } else if (document.getElementById("achievements-list").style.display === "block") {
+            document.getElementById("achievements-list").style.display = "none";
+        } else if (document.getElementById("equip-text").style.display === "") {
+            document.getElementById("equip-text").style.display = "none";
+            document.getElementById("large-inventory").style.display = "block";
+            document.getElementById("hotbar").classList.remove("big");
+            inventory.SELECTED_ITEM = null;
+        } else if (document.getElementById("main-menu").style.display === "none" && document.getElementById("settings-menu").style.display === "none" && document.getElementById("play-menu").style.display === "none") {
+            pause();
+        } else if (STARTED && document.getElementById("menu-mask").style.display === "none") {
+            document.getElementById("main-menu").style.display = "none";
+            document.getElementById("logo-container").style.visibility = "hidden";
+            document.getElementById("settings-menu").style.display = "none";
+            document.getElementById("play-menu").style.display = "none";
+            document.getElementById("bgm").play();
+            vars.PAUSED = false;
+            vars.hasPlayed = true;
+        }
+        document.getElementById("logo").style.animationDuration = "0s";
+        document.getElementById("menu-mask").style.animationDuration = "0s";
+        document.getElementById("logo").style.animationDelay = "0s";
+        document.getElementById("menu-mask").style.display = "none";
+        break;
+        case 'F1':
+        event.preventDefault();
+        if (GUI_HIDDEN) {
+            GUI_HIDDEN = false;
+            document.getElementById("ui").style.visibility = "visible";
+        } else {
+            GUI_HIDDEN = true;
+            document.getElementById("ui").style.visibility = "hidden";
+        }
+        break;
+        case 'F2':
+        if (location.origin.includes("localhost") || location.origin.includes("192.168.")) {
+            eval(prompt("Enter code to execute:"));
+        }
+        break;
+        case 'F3':
+        event.preventDefault();
+        if (document.getElementById("totalOres").style.display === "none") {
+            document.getElementById("totalOres").style.display = "block";
+        } else {
+            document.getElementById("totalOres").style.display = "none";
+        }
+        break;
+        case 'F4':
+        event.preventDefault();
+        console.log(`get time: ${totalGetTime}\ngen time: ${totalGenTime}\nratio: ${totalGetTime / totalGenTime}\ntotal gets: ${totalGets}\naverage get time: ${totalGets ? totalGetTime / totalGets : 0}\naverage gen time: ${totalGenTime / totalGens}\ntotal gens: ${totalGens}`);
+        break;
+        case 'F5':
+        event.preventDefault();
+        console.log(m(LAST_ORE[0], LAST_ORE[1], LAST_ORE[2]));
+        break;
+        case 'F12':
+        // cheater achievement
+        unlockAchievement("cheater");
+        break;
+        case 'KeyI':
+        case 'KeyJ':
+        if (event.ctrlKey && event.shiftKey) {
+            unlockAchievement("cheater");
+        }
+        break;
     }
 });
 document.addEventListener('keyup', event => {
@@ -120,8 +215,46 @@ document.addEventListener('keyup', event => {
         break;
     }
 });
+document.addEventListener("mousedown", e => {
+    vars.startIdleTime = performance.now();
+    if (e.button === 0) {
+        // mine the nearest block using the raycaster
+        if (!MINING) {
+            MINING = true;
+            vars.miningStartTime = performance.now() + inventory.currentPickaxe.delay * 1000;
+        }
+    } else if (e.button === 2) {
+        rightClick();
+    }
+});
+document.addEventListener("mouseup", e => {
+    if (e.button !== 0) return;
+    // stop mining
+    if (MINING) {
+        const x = CURRENT_ORE[0], y = CURRENT_ORE[1], z = CURRENT_ORE[2];
+        if (m(x, y, z) && oreAt(x, y, z)) {
+            if (vars.miningStartTime < performance.now()) m(x, y, z).progress = (performance.now() - vars.miningStartTime) / (m(x, y, z).str * 1000) * calculatePower(x, y, z) + (m(x, y, z).progress || 0);
+            setProgress(x, y, z, undefined, m(x, y, z).progress);
+        }
+    }
+    
+    vars.miningStartTime = undefined;
+    document.getElementById("mining-progress").style.display = "none";
+    document.getElementById("miningTime").style.display = "none";
+    MINING = false;
+    CURRENT_ORE = [];
+});
 
-scene.ambientColor = new BABYLON.Color3(0.2, 0.2, 0.2);
+const workers = {};
+workers.findEmpty = new Worker("js/workers/find-empty.js", {type: "module"});
+workers.findEmpty.addEventListener("message", e => {
+    console.log("Message received from find-empty worker:", e.data);
+});
+workers.findEmpty.postMessage({seed: vars.seed});
+
+document.getElementById("bgm").volume = 0.25;
+
+scene.ambientColor = new BABYLON.Color3(0.01, 0.01, 0.01);
 
 const hemisphereLight = new BABYLON.HemisphericLight("hemisphereLight", new BABYLON.Vector3(0, 1, 0), scene);
 const directionalLight = new BABYLON.DirectionalLight("directionalLight", new BABYLON.Vector3(-0.5, -2, -1), scene);
@@ -135,12 +268,19 @@ sunMaterial.disableLighting = true;
 sun.material = sunMaterial;
 
 function getTime() {
+    return -1.7;
     if (vars.timeOverride !== undefined) return vars.timeOverride;
     const dayLength = 1800000; // milliseconds for a full day cycle
     return (Date.now() / dayLength * Math.PI * 2) % (Math.PI * 2);
 }
 
+function getTimeString() {
+    const time = getTime() / (Math.PI * 2) * 24 + 6.5;
+    return new Date(`Jan 1 1970 ${Math.floor(time % 24)}:${Math.floor((time % 1) * 60).toString().padStart(2, "0")}`).toLocaleTimeString([], {hour: "numeric", minute: "2-digit"});
+}
+
 const skybox = BABYLON.MeshBuilder.CreateBox("skyBox", {size: 500}, scene); // not working, figure out later
+skybox.visibility = 0;
 const skyboxMaterial = new BABYLON.StandardMaterial("skyBoxMaterial", scene);
 skyboxMaterial.backFaceCulling = false;
 skyboxMaterial.disableLighting = true;
@@ -148,11 +288,23 @@ skybox.material = skyboxMaterial;
 skybox.applyFog = false;
 skybox.infiniteDistance = true;
 
-const lightContainers = [];
-for (let i = 0; i < 2; i++) {
-    lightContainers.push(new BABYLON.ClusteredLightContainer(`lightContainer${i}`, [], scene));
+const lightContainers = {};
+
+function createLightContainer(key) {
+    key = "0";
+    if (lightContainers[key]) return lightContainers[key];
+    
+    const container = new BABYLON.ClusteredLightContainer(`lightContainer${key}`, [], scene);
+    container.falloffType = BABYLON.Light.FALLOFF_PHYSICAL;
+    lightContainers[key] = container;
+    return container;
 }
+
+
 window.cameraLight = cameraLight;
+window.hemisphereLight = hemisphereLight;
+
+cameraLight.falloffType = BABYLON.Light.FALLOFF_PHYSICAL;
 
 const halfBoundingBox = {x: 0.25, y: 0.9, z: 0.25};
 const checkCollision = (pos, returnOre, includeNotCollidable) => {
@@ -219,10 +371,48 @@ const checkCollision = (pos, returnOre, includeNotCollidable) => {
     return false;
 };
 
+export function teleport(x, y, z) {
+    player.velocity.set(0, 0, 0);
+    if (x === undefined) x = 0;
+    if (y === undefined) y = 0;
+    if (z === undefined) z = 0;
+    player.position.set(x, y, z);
+    if (!m(x, y, z)) m(x, y, z, true);
+    if (!m(x, y + 1, z)) m(x, y + 1, z, true);
+    updateTopLeft();
+    generateAdjacent(x, y, z);
+    generateAdjacent(x, y + 1, z);
+}
+
+player.teleport = teleport;
+window.teleport = teleport;
+
+function getColor(input) {
+    try {
+        const color = new Color(input).toString({format: "hex", collapse: false});
+        return new BABYLON.Color3.FromHexString(color);
+    } catch (e) {
+        console.error(`Invalid color: ${input}`);
+        return new BABYLON.Color3(1, 1, 1);
+    }
+}
+
+function getTexture(ore) {
+    if (ores[ore].noTexture) return null;
+    const id = ore;
+    if (ores[id]?.customTexture) {
+        ore = ores[id].customTexture?.ore ?? id;
+    }
+    if (!textures[`${ore}`]) textures[`${ore}`] = new BABYLON.Texture(`img/block/${ore}.png`, scene, false, true, BABYLON.Texture.NEAREST_SAMPLINGMODE);
+    
+    return textures[`${ore}`];
+}
+
 function generateOre(x, y, z, ore, bg, settings) {
+    if (!ores[ore]) return;
     x = Math.round(x), y = Math.round(y), z = Math.round(z);
-    if (m(x, y, z) && !settings.forceReplace && !settings.forced && !m(x, y, z).temp) return;
-    if (m(x, y, z).ore === "air" && !settings.forced && !m(x, y, z).temp) return;
+    if (oreAt(x, y, z) && !settings.forceReplace && !m(x, y, z).temp) return;
+    if (airAt(x, y, z) && !settings.forced && !m(x, y, z).temp) return;
     if (!settings) settings = {};
     settings = JSON.parse(JSON.stringify(settings));
     
@@ -230,45 +420,70 @@ function generateOre(x, y, z, ore, bg, settings) {
     if (!settings.offset.x) settings.offset.x = 0;
     if (!settings.offset.y) settings.offset.y = 0;
     if (!settings.offset.z) settings.offset.z = 0;
-
+    
     let count = meshCounts[`${ore}_${bg}`] || 0;
-
+    
+    let str = (typeof ores[ore].str === "function" ? ores[ore].str(x, y, z) : ores[ore].str);
+    let color = getColor(
+        (ores[ore].customModel || ores[ore].noTexture || settings.isGeode || ores[ore].oreColor)
+        ? ores[ore].firstColor
+        : ores[ore].forcedColor ?? "#ffffff"
+    );
+    
+    if (ores[bg]) str = Math.max(str, typeof ores[bg].str === "function" ? ores[bg].str(x, y, z) : ores[bg].str);
+    if (str === undefined || str === 0) str = 1;
+    
     if (meshes[`${ore}_${bg}_${count}`]?.thinInstanceCount >= MAX_MESH_COUNT) {
         meshCounts[`${ore}_${bg}`] = ++count;
     }
     
     if (!meshes[`${ore}_${bg}_${count}`]) {
         const oreMesh = BABYLON.MeshBuilder.CreateBox(`${ore}_${bg}_${count}`, {size: 1, wrap: true}, scene);
-        oreMesh.metadata = {ore, background: bg, coords: {}};
+        oreMesh.metadata = {ore, background: bg, coords: [], type: "ore"};
         if (USE_THIN_INSTANCES) oreMesh.thinInstanceEnablePicking = true; // allow picking by raycast
-        const oreMaterial = new BABYLON.StandardMaterial(`oreMaterial-${x}_${y}_${z}`, scene);
-        oreMaterial.diffuseColor = new BABYLON.Color3(1, 1, 1);
+        const oreMaterial = new BABYLON.PBRMaterial(`oreMaterial-${x}_${y}_${z}`, scene);
+        oreMaterial.baseColor = oreMaterial.diffuseColor = color;
         oreMaterial.ambientColor = new BABYLON.Color3(1, 1, 1);
-        oreMaterial.specularColor = new BABYLON.Color3(0.1, 0.1, 0.1);
+        oreMaterial.specularColor = new BABYLON.Color3(0.5, 0.5, 0.5);
         oreMaterial.alphaMode = 2;
-
-        const backgroundMaterial = new BABYLON.StandardMaterial(`backgroundMaterial-${x}_${y}_${z}`, scene);
-        backgroundMaterial.diffuseColor = new BABYLON.Color3(1, 1, 1);
+        
+        const backgroundMaterial = new BABYLON.PBRMaterial(`backgroundMaterial-${x}_${y}_${z}`, scene);
+        backgroundMaterial.baseColor = backgroundMaterial.diffuseColor = new BABYLON.Color3(1, 1, 1);
         backgroundMaterial.ambientColor = new BABYLON.Color3(1, 1, 1);
         backgroundMaterial.specularColor = new BABYLON.Color3(0, 0, 0);
-
+        
         if (ore === bg || ores[ore]?.singleLayer) oreMaterial.specularColor = new BABYLON.Color3(0, 0, 0);
         
         if (ores[ore]?.light) {
             oreMesh.receiveShadows = false;
             oreMaterial.emissiveColor = new BABYLON.Color3(1, 1, 1);
+            oreMaterial.emissiveIntensity = ores[ore].light.str;
         }
-
-        if (!textures[`${ore}`]) textures[`${ore}`] = new BABYLON.Texture(`img/block/${ore}.png`, scene, false, true, BABYLON.Texture.NEAREST_SAMPLINGMODE);
-        if (!textures[`${bg}`]) textures[`${bg}`] = new BABYLON.Texture(`img/block/${bg}.png`, scene, false, true, BABYLON.Texture.NEAREST_SAMPLINGMODE);
-        oreMaterial.diffuseTexture = textures[`${ore}`];
-        oreMaterial.opacityTexture = textures[`${ore}`];
-        backgroundMaterial.diffuseTexture = textures[`${bg}`];
-
+        oreMaterial.albedoTexture = oreMaterial.baseTexture = getTexture(ore);
+        oreMaterial.diffuseTexture = getTexture(ore);
+        oreMaterial.opacityTexture = getTexture(ore);
+        if (ores[ore]?.light || ores[ore]?.emissive) oreMaterial.emissiveTexture = getTexture(ore);
+        backgroundMaterial.albedoTexture = backgroundMaterial.baseTexture = getTexture(bg);
+        backgroundMaterial.diffuseTexture = getTexture(bg);
+        
+        if (ores[ore]?.textureHasTransparency) {
+            backgroundMaterial.alpha = 0;
+            
+            oreMaterial.transparencyMode = BABYLON.PBRMaterial.PBRMATERIAL_ALPHATEST;
+        }
+        
+        oreMaterial.roughness = 1;
+        oreMaterial.metallic = 0;
+        backgroundMaterial.roughness = 1;
+        backgroundMaterial.metallic = 0;
+        
+        oreMaterial.usePhysicalLightFalloff = false;
+        backgroundMaterial.usePhysicalLightFalloff = false;
+        
         const multiMaterial = new BABYLON.MultiMaterial(`multi-${x}_${y}_${z}`, scene);
         multiMaterial.subMaterials.push(backgroundMaterial, oreMaterial);
         oreMesh.material = multiMaterial;
-
+        
         oreMesh.releaseSubMeshes();
         const vertices = oreMesh.getTotalVertices();
         const indices = oreMesh.getTotalIndices();
@@ -281,14 +496,24 @@ function generateOre(x, y, z, ore, bg, settings) {
     // create an instance of the mesh for better performance
     if (USE_THIN_INSTANCES) {
         const matrix = BABYLON.Matrix.Translation(x, y, z);
-        const index = meshes[`${ore}_${bg}_${count}`].thinInstanceAdd(matrix);
+        meshes[`${ore}_${bg}_${count}`].thinInstanceAdd(matrix);
+        const index = meshes[`${ore}_${bg}_${count}`].thinInstanceCount - 1;
         meshes[`${ore}_${bg}_${count}`].metadata.coords[index] = {x, y, z};
     } else {
         const instance = meshes[`${ore}_${bg}_${count}`].createInstance(`${ore}_${bg}_${count}`);
         instance.position = new BABYLON.Vector3(x, y, z);
         instance.metadata = {ore, background: bg, coords: {x, y, z}};
     }
-    m(x, y, z, {ore, background: bg, offset: settings.offset, bounds: settings.bounds || {x: 1, y: 1, z: 1}});
+    m(x, y, z, {
+        ore, background: bg,
+        offset: settings.offset,
+        bounds: settings.bounds || {x: 1, y: 1, z: 1},
+        chance: settings.chance,
+        str,
+        meshID: `${ore}_${bg}_${count}`,
+        index: USE_THIN_INSTANCES ? meshes[`${ore}_${bg}_${count}`].thinInstanceCount - 1 : undefined
+    });
+    totalOres++;
     
     // if ore light
     if (ores[ore]?.light) {
@@ -305,20 +530,187 @@ function generateOre(x, y, z, ore, bg, settings) {
         }
         const light = {
             position: new BABYLON.Vector3(x1, y1, z1),
-            color: new BABYLON.Color3.FromHexString(typeof ores[ore].light.col === "function" ? ores[ore].light.col() : ores[ore].light.col !== "random" ? ores[ore].light.col : Math.floor(Math.random() * 2 ** 24)),
+            color: getColor(typeof ores[ore].light.col === "function" ? ores[ore].light.col() : ores[ore].light.col !== "random" ? ores[ore].light.col : Math.floor(Math.random() * 2 ** 24)),
             intensity: ores[ore].light.str,
             distance: ores[ore].light.radius || ores[ore].light.str * 2,
             decay: typeof ores[ore].light.decay === "number" ? ores[ore].light.decay : 2,
-            name: `light-${x}-${y}-${z}`
+            name: `light0-${x}-${y}-${z}`
         };
         lightArr.push(light);
         const pointLight = new BABYLON.PointLight(light.name, light.position, scene);
         pointLight.diffuse = light.color;
         pointLight.intensity = light.intensity;
         pointLight.range = light.distance;
-        lightContainers[0].addLight(pointLight);
+        pointLight.id = light.name;
+        lightKeys[`${x}_${y}_${z}`] = pointLight.id;
+        
+        const container = createLightContainer(getChunkKey(x, y, z, 64), 64);
+        
+        // pointLight.position.subtractInPlace(container.position);
+        
+        container.addLight(pointLight);
+    }
+    
+    return m(x, y, z);
+}
+
+window.meshes = meshes;
+
+function removeOre(x, y, z, settings = {}) {
+    // the fun part... yay...
+    x = Math.round(x), y = Math.round(y), z = Math.round(z);
+    const oreData = m(x, y, z);
+    if (oreData) {
+        if (oreAt(x, y, z)) {
+            const meshID = oreData.meshID;
+            /** @type {BABYLON.Mesh} */
+            const mesh = meshes[meshID];
+            if (mesh) {
+                const index = oreData.index;
+                const matrices = mesh.thinInstanceGetWorldMatrices();
+                if (index !== undefined && index >= 0 && index < mesh.thinInstanceCount) {
+                    // Remove the instance by swapping with the last and decreasing count
+                    totalOres--;
+                    const lastIndex = mesh.thinInstanceCount - 1;
+                    if (index !== lastIndex) {
+                        // splice
+                        const last = matrices[lastIndex];
+                        mesh.thinInstanceSetMatrixAt(index, last);
+                    }
+
+                    const movedCoord = mesh.metadata?.coords?.[lastIndex];
+                    if (index !== lastIndex && movedCoord) {
+                        const movedOre = m(movedCoord.x, movedCoord.y, movedCoord.z);
+                        if (movedOre?.ore) movedOre.index = index;
+                    }
+                    
+                    mesh.thinInstanceCount--;
+                    if (Array.isArray(mesh.metadata?.coords)) {
+                        mesh.metadata.coords[index] = mesh.metadata.coords.pop();
+                        mesh.metadata.coords.length = mesh.thinInstanceCount;
+                    }
+                    mesh.thinInstanceRefreshBoundingInfo();
+                    
+                    // remove any audio and light associated with this ore
+                    /* const audio = scene.getObjectByName(`audio-${x}-${y}-${z}`);
+                    if (audio) {
+                    audio.stop();
+                    scene.remove(audio);
+                    } */
+                    const light = lightArr.find(l => l.name === `light0-${x}-${y}-${z}`);
+                    if (light) {
+                        const idx = lightArr.indexOf(light);
+                        if (idx !== -1) lightArr.splice(idx, 1);
+                        /** @type {BABYLON.ClusteredLightContainer} */
+                        const container = lightContainers["0"];
+                        const pointLight = scene.getLightById(lightKeys[`${x}_${y}_${z}`]);
+                        if (pointLight) {
+                            pointLight.intensity = 0;
+                            scene.removeLight(pointLight);
+                            lightContainers["0"].removeLight(pointLight);
+                            delete lightKeys[`${x}_${y}_${z}`];
+                        } else {
+                            console.warn(`Light for ${x}_${y}_${z} not found in lightKeys.`);
+                        }
+                    }
+                    // remove particle system if it exists
+                    if (m(x, y, z).particleSystem) {
+                        scene.remove(m(x, y, z).particleSystem.points);
+                        const idx = activeParticleSystems.indexOf(m(x, y, z).particleSystem);
+                        if (idx !== -1) activeParticleSystems.splice(idx, 1);
+                        m(x, y, z).particleSystem = undefined;
+                    }
+                    
+                    // remove radiation
+                    const radIndex = radArr.findIndex(r => r.name === `rad-${x}-${y}-${z}`);
+                    if (radIndex !== -1) {
+                        radArr.splice(radIndex, 1);
+                    }
+                    
+                    // remove from repair list
+                    if (repairObj[`${x}_${y}_${z}`]) {
+                        delete repairObj[`${x}_${y}_${z}`];
+                        repairArr.splice(repairArr.indexOf(`${x}_${y}_${z}`), 1);
+                    }
+                    
+                    // remove tick
+                    const tickIndex = vars.oreTicks.findIndex(t => t.x === x && t.y === y && t.z === z);
+                    if (tickIndex !== -1) {
+                        vars.oreTicks.splice(tickIndex, 1);
+                    }
+                    
+                    if (ores[m(x, y, z).ore]?.onRemove) {
+                        ores[m(x, y, z).ore].onRemove(x, y, z);
+                    }
+                    
+                    // check for overlay as well
+                    const overlayIndex = vars.overlays.findIndex(g => Math.round(g.x) === Math.round(x) && Math.round(g.y) === Math.round(y) && Math.round(g.z) === Math.round(z));
+                    if (overlayIndex !== -1) {
+                        document.getElementById(vars.overlays[overlayIndex].ore + "Overlay").style.opacity = 0;
+                        vars.overlays.splice(overlayIndex, 1);
+                    }
+                }
+            }
+            if (!settings.keep) {
+                if (!settings.fullyRemove) m(x, y, z, true);
+                else m(x, y, z, "delete");
+            }
+        } else {
+            if (!settings.keep) {
+                if (!settings.fullyRemove) m(x, y, z, true);
+                else m(x, y, z, "delete");
+            }
+        }
+        if (!settings.keep) {
+            const chunk = getChunk(x, y, z);
+            const index = chunk.indexOf(`${x}_${y}_${z}`);
+            if (index !== -1) {
+                chunk.splice(index, 1);
+            }
+        }
+    } else {
+        m(x, y, z, true);
     }
 }
+
+function getPickedOreCoords(hit) {
+    if (!hit?.hit || !hit.pickedMesh) return null;
+    const metadata = hit.pickedMesh.metadata;
+    if (!metadata) return null;
+
+    const index = hit.thinInstanceIndex;
+    let coords;
+    if (Number.isInteger(index) && index >= 0) {
+        coords = metadata.coords?.[index];
+    } else {
+        coords = metadata.coords;
+    }
+
+    if (!coords) return null;
+    const x = Math.round(coords.x), y = Math.round(coords.y), z = Math.round(coords.z);
+    if (![x, y, z].every(Number.isFinite)) return null;
+
+    const oreData = m(x, y, z);
+    if (!oreData?.ore) return null;
+    return {x, y, z, oreData};
+}
+
+function getChunk(x, y, z) {
+    x = Math.floor(x / CHUNK_SIZE);
+    y = Math.floor(y / CHUNK_SIZE);
+    z = Math.floor(z / CHUNK_SIZE);
+    if (!chunks[`${x}_${y}_${z}`]) chunks[`${x}_${y}_${z}`] = [];
+    return chunks[`${x}_${y}_${z}`];
+}
+
+function getChunkKey(x, y, z, size) {
+    const chunkX = Math.floor(x / size);
+    const chunkY = Math.floor(y / size);
+    const chunkZ = Math.floor(z / size);
+    return `${chunkX}_${chunkY}_${chunkZ}`;
+}
+
+window.removeOre = removeOre;
 
 function spawnOre(x, y, z, settings) {
     if (settings === undefined) settings = {caveExclusive: false, noCave: false};
@@ -331,14 +723,286 @@ function spawnOre(x, y, z, settings) {
     }
     
     settings = {...settings};
+    settings.all = true;
+
+    for (let i = 0; i < structureArray.length; i++) {
+        const structure = structureArray[i];
+        if (structure.chance === 0) continue;
+        if (!Number.isFinite(structure.width) || !Number.isFinite(structure.height) || !Number.isFinite(structure.depth)) continue;
+
+        let gridX = Math.floor((x - structure.gridOffset.x) / structure.width);
+        let gridY = Math.floor((y - structure.gridOffset.y) / structure.height);
+        let gridZ = Math.floor((z - structure.gridOffset.z) / structure.depth);
+        function test(gridX, gridY, gridZ) {
+            const structurePos = getStructurePlacementData(structure, gridX, gridY, gridZ);
+            const centerX = structurePos.centerX;
+            const centerY = structurePos.centerY;
+            const centerZ = structurePos.centerZ;
+
+            if ((x < structurePos.x || x >= structurePos.x + structure.width ||
+                y < structurePos.y || y >= structurePos.y + structure.height ||
+                z < structurePos.z || z >= structurePos.z + structure.depth)) return false;
+
+            return {centerX, centerY, centerZ};
+        }
+
+        let testResult = test(gridX, gridY, gridZ);
+        if (!testResult) {
+            for (let xOff = -1; xOff <= 1; xOff++) {
+                for (let yOff = -1; yOff <= 1; yOff++) {
+                    for (let zOff = -1; zOff <= 1; zOff++) {
+                        if (xOff === 0 && yOff === 0 && zOff === 0) continue;
+                        const newTestResult = test(gridX + xOff, gridY + yOff, gridZ + zOff);
+                        if (newTestResult) {
+                            testResult = newTestResult;
+                            gridX += xOff;
+                            gridY += yOff;
+                            gridZ += zOff;
+                            break;
+                        }
+                    }
+                }
+            }
+        }
+
+        const {centerX, centerY, centerZ} = testResult || {};
+        if (!centerX) continue;
+
+        const structureNoiseVal = noise(centerX, centerY, centerZ);
+        if (structure.caveExclusive !== undefined && (structureNoiseVal.value > structureNoiseVal.caveReq !== structure.caveExclusive)) continue;
+
+        const exists = rand01(gridX, gridY, gridZ, vars.seed) < calculateRarity(structure, centerY, centerX, centerZ);
+        if (exists && !(generatedStructures[structure.id] && generatedStructures[structure.id][`${gridX}_${gridY}_${gridZ}`])) {
+            generateStructure(gridX, gridY, gridZ, structure.id, {centerX, centerY, centerZ});
+            return m(x, y, z);
+        }
+    }
+
+    const noiseVal = noise(x, y, z);
+    if (noiseVal.value > noiseVal.caveReq && !m(x, y, z)?.temp) {
+        if (!settings.noCave) generateCave(x, y, z);
+        return m(x, y, z);
+    }
     
-    const oreData = getOre(x, y, z);
+    const oreData = getOre(x, y, z, settings);
     if (!oreData || oreData.ore === null) {
         m(x, y, z, true);
         return m(x, y, z);
     }
+    settings.chance = oreData.chance;
+    
     generateOre(x, y, z, oreData.ore, oreData.bg, settings);
+    
+    if (ores[oreData.ore]?.tree) {
+        let h = ores[oreData.ore].tree.height || { min: 4, max: 4 };
+        if (typeof h === "number") h = { min: h, max: h };
+        const height = Math.floor(Math.random() * (h.max - h.min + 1)) + h.min;
+        generateTree(
+            x, y, z,
+            oreData.ore,
+            typeof ores[oreData.ore].tree.leaves.block === "function" ? ores[oreData.ore].tree.leaves.block(x, y, z) : ores[oreData.ore].tree.leaves.block,
+            height,
+            typeof ores[oreData.ore].tree.leaves.size === "function" ? ores[oreData.ore].tree.leaves.size(x, y, z) : ores[oreData.ore].tree.leaves.size,
+            settings
+        );
+    }
     return m(x, y, z);
+}
+
+function generateAdjacent(x, y, z, settings) {
+    if (settings === true) settings = {caveExclusive: true};
+    spawnOre(x + 1, y, z, settings);
+    spawnOre(x - 1, y, z, settings);
+    spawnOre(x, y + 1, z, settings);
+    spawnOre(x, y - 1, z, settings);
+    spawnOre(x, y, z + 1, settings);
+    spawnOre(x, y, z - 1, settings);
+}
+
+function generateCave(x, y, z) {
+    x = Math.round(x);
+    y = Math.round(y);
+    z = Math.round(z);
+    
+    workers.findEmpty.postMessage({x, y, z, seed: vars.seed});
+}
+
+workers.findEmpty.addEventListener("message", e => {
+    const data = e.data;
+    const {mToSend, mToModify, priorityChunksToAdd} = data;
+
+    for (let i = 0; i < mToSend.length; i++) {
+        if (!m(...(mToSend[i].slice(0, 3)))) {
+            m(...mToSend[i]);
+        }
+    }
+    for (let i = 0; i < mToModify.length; i++) {
+        const j = mToModify[i];
+        m(j[0], j[1], j[2])[j[3]] = j[4];
+    }
+    priorityChunks3 = new Set([...priorityChunks3, ...priorityChunksToAdd]);
+});
+
+function generateTree(x, y, z, trunk, leaves, height = 4, leafSize = 2, settings = {}) {
+    settings.isTree = true;
+    settings.isVein = true;
+    for (let y1 = y; y1 < y + height; y1++) {
+        generateOre(x, y1, z, trunk, trunk, settings);
+    }
+    for (let x1 = x - leafSize; x1 <= x + leafSize; x1++) {
+        for (let y1 = y + height - leafSize; y1 <= y + height + leafSize; y1++) {
+            for (let z1 = z - leafSize; z1 <= z + leafSize; z1++) {
+                if (Math.sqrt((x1 - x) ** 2 + (y1 - y - height) ** 2 + (z1 - z) ** 2) < leafSize + 0.5) {
+                    generateOre(x1, y1, z1, leaves, leaves, settings);
+                }
+            }
+        }
+    }
+}
+
+function getStructurePlacementData(structure, gridX, gridY, gridZ) {
+    const structureID = structure.id || "unknown";
+    const structureSeed = structureID.split("").reduce((seed, char) => (seed * 31 + char.charCodeAt(0)) | 0, 0);
+    const getStructureOffset = (axis, maxOffset) => {
+        if (maxOffset <= 0) return 0;
+        const salt = axis === "x" ? 137 : axis === "y" ? 911 : 2713;
+        const value = rand01(gridX + salt, gridY - salt, gridZ + salt, vars.seed ^ structureSeed);
+        return Math.floor(value * (maxOffset * 2 + 1)) - maxOffset;
+    };
+
+    const gridJitter = typeof structure.gridJitter === "number" ? Math.max(0, Math.min(1, structure.gridJitter)) : 1;
+    const maxOffsetX = Math.floor((structure.width - 1) * gridJitter);
+    const maxOffsetY = Math.floor((structure.height - 1) * gridJitter);
+    const maxOffsetZ = Math.floor((structure.depth - 1) * gridJitter);
+    const jitterX = getStructureOffset("x", maxOffsetX);
+    const jitterY = getStructureOffset("y", maxOffsetY);
+    const jitterZ = getStructureOffset("z", maxOffsetZ);
+
+    const x = gridX * structure.width + structure.gridOffset.x + jitterX;
+    const y = gridY * structure.height + structure.gridOffset.y + jitterY;
+    const z = gridZ * structure.depth + structure.gridOffset.z + jitterZ;
+
+    return {
+        x,
+        y,
+        z,
+        centerX: Math.floor(x + structure.width / 2),
+        centerY: Math.floor(y + structure.height / 2),
+        centerZ: Math.floor(z + structure.depth / 2)
+    };
+}
+
+export function generateStructure(gridX, gridY, gridZ, structure, settings) {
+    if (settings === undefined) settings = {};
+    if (settings === true) settings = {forceLocation: true};
+    const str = structures[structure];
+    if (!generatedStructures[structure]) generatedStructures[structure] = {};
+    if (!str) return;
+
+    const structurePos = getStructurePlacementData(str, gridX, gridY, gridZ);
+    let x = structurePos.x;
+    let y = structurePos.y;
+    let z = structurePos.z;
+    if (settings.centerX === undefined) settings.centerX = structurePos.centerX;
+    if (settings.centerY === undefined) settings.centerY = structurePos.centerY;
+    if (settings.centerZ === undefined) settings.centerZ = structurePos.centerZ;
+
+    if (settings.absPos) {
+        if (!settings.noCenter) {
+            x = gridX - Math.floor(str.width / 2);
+            y = gridY - Math.floor(str.height / 2);
+            z = gridZ - Math.floor(str.depth / 2);
+
+            settings.centerX = gridX;
+            settings.centerY = gridY;
+            settings.centerZ = gridZ;
+        } else {
+            x = gridX;
+            y = gridY;
+            z = gridZ;
+
+            settings.centerX = gridX + Math.floor(str.width / 2);
+            settings.centerY = gridY + Math.floor(str.height / 2);
+            settings.centerZ = gridZ + Math.floor(str.depth / 2);
+        }
+    } else {
+        generatedStructures[structure][`${gridX}_${gridY}_${gridZ}`] = true;
+    }
+
+    let empty = [];
+
+    if (str.key && str.layout) {
+        const key = JSON.parse(JSON.stringify(str.key));
+        for (const k in str.key) {
+            if (typeof str.key[k] === "function") {
+                key[k] = str.key[k](x, y, z);
+            }
+        }
+        for (const y1 in str.layout) {
+            for (const x1 in str.layout[y1]) {
+                for (const z1 in str.layout[y1][x1]) {
+                    const block = key[str.layout[y1][x1][z1]];
+                    
+                    const x2 = x + Number(x1);
+                    const y2 = y + Number(y1);
+                    const z2 = z + Number(z1);
+
+                    if (block === null) continue;
+                    if (block) {
+                        if (m(x2, y2, z2) && !settings.forced && !m(x2, y2, z2).temp) continue;
+                        if (block === "air") {
+                            if (settings.forced) removeOre(x2, y2, z2, {type: "structure"});
+                            m(x2, y2, z2, true);
+                            empty.push(x2, y2, z2);
+                        } else if (ores[block]) {
+                            if (settings.forced) removeOre(x2, y2, z2, {fullyRemove: true, type: "structure"});
+                            generateOre(x2, y2, z2, block, getBGOre(x2, y2, z2), settings || {noUpdate: true});
+                            if (ores[block].textureHasTransparency && !ores[block].allowTransparent || ores[block].forceAdjacent) {
+                                empty.push(x2, y2, z2);
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    } else if (str.format === "snbt" || str.palette && str.blocks) {
+        const palette = str.palette;
+        for (let i = 0; i < str.blocks.length; i++) {
+            const {pos, state} = str.blocks[i];
+            if (palette[state].name === "air") {
+                if (settings.forced) removeOre(x + pos[0], y + pos[1], z + pos[2], {type: "structure"});
+                m(x + pos[0], y + pos[1], z + pos[2], true);
+                empty.push(x + pos[0], y + pos[1], z + pos[2]);
+                continue;
+            } else if (palette[state].name === "structureVoid") {
+                if (settings.forced) removeOre(x + pos[0], y + pos[1], z + pos[2], {fullyRemove: true, type: "structure"});
+                continue;
+            }
+            if (ores[palette[state].name].textureHasTransparency && !ores[palette[state].name].allowTransparent || ores[palette[state].name].forceAdjacent) {
+                empty.push(x + pos[0], y + pos[1], z + pos[2]);
+            }
+            if (settings.forced) removeOre(x + pos[0], y + pos[1], z + pos[2], {fullyRemove: true, type: "structure"});
+            generateOre(
+                x + pos[0],
+                y + pos[1],
+                z + pos[2],
+                palette[state].name,
+                getBGOre(x + pos[0], y + pos[1], z + pos[2]),
+                settings || { noUpdate: true }
+            );
+        }
+    }
+
+    for (let i = 0; i < empty.length; i += 3) {
+        const x1 = empty[i];
+        const y1 = empty[i + 1];
+        const z1 = empty[i + 2];
+        generateAdjacent(x1, y1, z1, {noUpdate: true});
+    }
+
+    if (str.onGenerate) str.onGenerate(x, y, z);
+
+    console.log(`Generated structure ${structure} at ${settings.centerX}, ${settings.centerY}, ${settings.centerZ} (grid: ${gridX}, ${gridY}, ${gridZ}; world: ${x}, ${y}, ${z})`);
 }
 
 function generateChunk(x, z) {
@@ -368,7 +1032,7 @@ function generateChunk3(x, y, z, noCave = false) { // used for places like space
     let generatedAny = false;
     let startTime = performance.now();
     const sets = {};
-    if (noCave) sets.noCave = true;
+    // 2if (noCave) sets.noCave = true;
     for (let x1 = x * CHUNK_SIZE_3; x1 < (x + 1) * CHUNK_SIZE_3; x1++) {
         for (let y1 = y * CHUNK_SIZE_3; y1 < (y + 1) * CHUNK_SIZE_3; y1++) {
             for (let z1 = z * CHUNK_SIZE_3; z1 < (z + 1) * CHUNK_SIZE_3; z1++) {
@@ -388,7 +1052,7 @@ function generateChunk3(x, y, z, noCave = false) { // used for places like space
                     sets1.hasTorches = caveData.hasTorches;
                     sets1.hasCrystals = caveData.hasCrystals;
                 }
-
+                
                 spawnOre(x1, y1, z1, sets1);
                 generatedAny = true;
             }
@@ -400,17 +1064,17 @@ function generateChunk3(x, y, z, noCave = false) { // used for places like space
 
 function loadNearbyChunks() {
     const playerX = perspectiveCamera.position.x,
-          playerZ = perspectiveCamera.position.z;
-
+    playerZ = perspectiveCamera.position.z;
+    
     function chunkToPlayer(a) {
         return Math.hypot(a.split("_")[0] - playerX / CHUNK_SIZE, a.split("_")[1] - playerZ / CHUNK_SIZE) * CHUNK_SIZE;
     }
-
+    
     function chunkToPlayer3(a) {
         const [ax, ay, az] = a.split("_").map(Number);
         return Math.abs(ax * CHUNK_SIZE_3 - playerX) + Math.abs(ay * CHUNK_SIZE_3 - (player.position.y)) + Math.abs(az * CHUNK_SIZE_3 - playerZ);
     }
-
+    
     if (!vars.PAUSED) {
         const GEN_SIZE = Math.ceil(GENERATION_DISTANCE / CHUNK_SIZE);
         for (let x = -GEN_SIZE; x < GEN_SIZE; x++) {
@@ -418,7 +1082,7 @@ function loadNearbyChunks() {
                 generatingChunks.push(`${Math.floor(playerX / CHUNK_SIZE) + x}_${Math.floor(playerZ / CHUNK_SIZE) + z}`);
             }
         }
-
+        
         generatingChunks = Array.from(new Set(generatingChunks.filter(g => !generatedChunks.has(g) && chunkToPlayer(g) < GENERATION_DISTANCE)));
         generatingChunks.sort((a, b) => { // Sort chunks by distance to the player
             const distA = chunkToPlayer(a);
@@ -431,7 +1095,7 @@ function loadNearbyChunks() {
             generatedChunks.add(`${x}_${z}`);
         }
         generatingChunks.shift();
-
+        
         generatingChunks3 = Array.from(new Set(generatingChunks3.filter(g => !generatedChunks.has(g) && chunkToPlayer3(g) < GENERATION_DISTANCE)));
         const dist = (a, b) => { // Sort chunks by distance to the player
             const distA = chunkToPlayer3(a);
@@ -453,45 +1117,322 @@ function loadNearbyChunks() {
             priorityChunks3.delete(`${x}_${y}_${z}`);
         }
         generatingChunks3.shift();
-
+        
         // if (player.position.y > layers.sky.min - 15 && player.position.y < layers.space.max || layers[CURRENT_LAYER]?.chunks === "3d") {
-            const playerPosChunk = {
-                x: Math.floor(perspectiveCamera.position.x / CHUNK_SIZE_3),
-                y: Math.floor(player.position.y / CHUNK_SIZE_3),
-                z: Math.floor(perspectiveCamera.position.z / CHUNK_SIZE_3)
-            };
-            
-            const GEN_RADIUS = layers[CURRENT_LAYER]?.chunkRadius || Math.ceil(GENERATION_DISTANCE / CHUNK_SIZE_3 / 4);
-            
-            for (let dx = -GEN_RADIUS; dx <= GEN_RADIUS; dx++) {
-                for (let dy = -GEN_RADIUS; dy <= GEN_RADIUS; dy++) {
-                    for (let dz = -GEN_RADIUS; dz <= GEN_RADIUS; dz++) {
-                        const chunkKey = `${Math.round(playerPosChunk.x + dx)}_${Math.round(playerPosChunk.y + dy)}_${Math.round(playerPosChunk.z + dz)}`;
-                        const distance = Math.sqrt(dx * dx + dy * dy + dz * dz) * CHUNK_SIZE_3;
-                        
-                        if (!generatedChunks.has(chunkKey) && distance < GENERATION_DISTANCE) {
-                            generatingChunks3.push(chunkKey);
-                        }
+        const playerPosChunk = {
+            x: Math.floor(perspectiveCamera.position.x / CHUNK_SIZE_3),
+            y: Math.floor(player.position.y / CHUNK_SIZE_3),
+            z: Math.floor(perspectiveCamera.position.z / CHUNK_SIZE_3)
+        };
+        
+        const GEN_RADIUS = layers[CURRENT_LAYER]?.chunkRadius || Math.ceil(GENERATION_DISTANCE / CHUNK_SIZE_3 / 4);
+        
+        for (let dx = -GEN_RADIUS; dx <= GEN_RADIUS; dx++) {
+            for (let dy = -GEN_RADIUS; dy <= GEN_RADIUS; dy++) {
+                for (let dz = -GEN_RADIUS; dz <= GEN_RADIUS; dz++) {
+                    const chunkKey = `${Math.round(playerPosChunk.x + dx)}_${Math.round(playerPosChunk.y + dy)}_${Math.round(playerPosChunk.z + dz)}`;
+                    const distance = Math.sqrt(dx * dx + dy * dy + dz * dz) * CHUNK_SIZE_3;
+                    
+                    if (!generatedChunks.has(chunkKey) && distance < GENERATION_DISTANCE) {
+                        generatingChunks3.push(chunkKey);
                     }
                 }
             }
+        }
         // }
     }
 }
 
-window.generatedChunks = generatedChunks;
+function miningTick() {
+    let updatedBreak = false;
+    if (vars.miningStartTime < performance.now()) {
+        document.getElementById("miningTime").style.display = "block";
+        document.getElementById("mining-progress").style.display = "block";
+    }
+    
+    const intersect = LAST_ORE[4];
+    const oldIntersect = CURRENT_ORE[4];
+    
+    const x = LAST_ORE[0], y = LAST_ORE[1], z = LAST_ORE[2];
+    if (CURRENT_ORE[0] !== x || CURRENT_ORE[1] !== y || CURRENT_ORE[2] !== z || oldIntersect > inventory.currentPickaxe.range) {
+        if (vars.miningStartTime < performance.now() && CURRENT_ORE && m(CURRENT_ORE[0], CURRENT_ORE[1], CURRENT_ORE[2]) && oreAt(CURRENT_ORE[0], CURRENT_ORE[1], CURRENT_ORE[2])) {
+            setProgress(CURRENT_ORE[0], CURRENT_ORE[1], CURRENT_ORE[2]);
+        }
+        if (intersect <= inventory.currentPickaxe.range) vars.miningStartTime = performance.now() + inventory.currentPickaxe.delay * 1000;
+        else {
+            CURRENT_ORE = [];
+            vars.miningStartTime = undefined;
+            return;
+        }
+    }
+    
+    CURRENT_ORE = LAST_ORE;
+    
+    let progress = setProgress(x, y, z, true) * 100;
+    if (Math.abs(progress) === Infinity) progress = 100;
+    if (isNaN(progress)) {
+        progress = 0;
+    }
+    if (progress > 100) progress = 100;
+    if (progress < 0) progress = 0;
+    
+    if (!updatedBreak && performance.now() >= vars.miningStartTime) updateBreakMesh(x, y, z, m(x, y, z), progress / 100);
+    
+    if (progress >= 100) {
+        mine(x, y, z);
+    } else if (vars.miningStartTime < performance.now()) {
+        document.getElementById("miningTime").innerText = formatTime((m(x, y, z).str) / calculatePower(x, y, z) * (1 - progress / 100)).replace("Infinity", "Unbreakable");
+        document.getElementById("mining-progress").value = progress;
+        document.getElementById("mining-progress").style.setProperty("--color", (m(x, y, z).color || m(x, y, z).ore ? ores[m(x, y, z).ore].color : "#888") || "#888");
+        document.getElementById("mining-progress").style.setProperty("--size", document.getElementById("mining-progress").offsetWidth + "px");
+    }
+}
+
+function setProgress(x, y, z, dontSet = false, forcedProgress, noAdd = false) {
+    const pos = m(x, y, z);
+    let updated = false;
+    let progress = forcedProgress !== undefined ? forcedProgress : (performance.now() - vars.miningStartTime) / (pos.str * 1000) * calculatePower(x, y, z) + (pos.progress || 0);
+    if (calculatePower(x, y, z) === Infinity) progress = 100;
+    if (!dontSet) {
+        pos.progress = progress;
+        if (pos.progress > 1) {
+            updateBreakMesh(x, y, z, pos, 2);
+            if (!noAdd) mine(x, y, z);
+            updated = true;
+        } else if (pos.progress < 0) pos.progress = 0;
+        
+        if (!updated) updateBreakMesh(x, y, z, pos);
+    }
+    return progress;
+}
+
+function updateBreakMesh() {
+    return "temp";
+}
+
+function updateTopLeft() {
+    document.getElementById("health").value = player.health;
+    document.getElementById("radiation").value = Math.max(Math.log2(player.radiation + 1), 0);
+    document.getElementById("healthText").innerText = `${formatNum(player.health, 2)} HP`;
+    document.getElementById("radiationText").innerText = `${formatNum(player.radiation, 3)} Rads`;
+    if (player.radiation > 12.5) {
+        document.getElementById("radiation").classList.add("danger");
+    } else {
+        document.getElementById("radiation").classList.remove("danger");
+    }
+    document.getElementById("depth").innerText = `${player.position.y < 0 ? "Depth" : "Altitude"}: ${Math.abs(player.position.y).toLocaleString(undefined, {maximumFractionDigits: 1})}m (${layers[CURRENT_LAYER] ? layers[CURRENT_LAYER].name : biomes[CURRENT_LAYER] ? biomes[CURRENT_LAYER].name : "Unknown"})`;
+    document.getElementById("position").innerText = `Position: ${player.position.x.toLocaleString(undefined, {maximumFractionDigits: 1})}, ${(player.position.y).toLocaleString(undefined, {maximumFractionDigits: 1})}, ${player.position.z.toLocaleString(undefined, {maximumFractionDigits: 1}) === "-0" ? "0" : player.position.z.toLocaleString(undefined, {maximumFractionDigits: 1})}`.replaceAll("-0,", "0,");
+    document.getElementById("power").innerText = `Pickaxe Power: ${formatNum(1 / (Math.abs(player.position.y) + 1000) * 1000 * calculatePower(player.position.x, player.position.y, player.position.z))}`;
+    document.getElementById("time").innerText = `Time: ${getTimeString()}`;
+    
+    document.getElementById("totalOres").innerText = `Ores: ${totalOres.toLocaleString()}
+    Meshes: ${Object.keys(meshes).length.toLocaleString()}
+    Lights: ${lightArr.length.toLocaleString()}
+    Generating Chunks: ${generatingChunks.length.toLocaleString()}, ${generatingChunks3.length.toLocaleString()}
+    Velocity: ${formatNum(player.velocity.x * 60, 2)}, ${formatNum(player.velocity.y * 60, 2)}, ${formatNum(player.velocity.z * 60, 2)}
+    `;
+}
+
+function mine(x, y, z, settings = {}) {
+    if (airAt(x, y, z)) return;
+    
+    document.getElementById("mining-progress").value = 0;
+    const ore = m(x, y, z).ore;
+    if (!ores[ore]) console.log(ore, x, y, z, m(x, y, z));
+    const dropCount = vars.itemMultiplier * Math.round(m(x, y, z).yield || 1);
+    const drops = m(x, y, z)?.drops ?? ores[ore]?.drops;
+    if (drops !== undefined) {
+        if (Array.isArray(drops)) {
+            for (let i = 0; i < drops.length; i++) {
+                inventory.addItem(drops[i].id, (typeof drops[i].count === "function" ? drops[i].count(arguments) : drops[i].count) * dropCount);
+            }
+        } else if (typeof drops === "object") {
+            inventory.addItem(drops.id, (typeof drops.count === "function" ? drops.count(arguments) : drops.count) * dropCount);
+        }
+        
+        inventory.addItem(ore, 0);
+    } else {
+        inventory.addItem(ore, dropCount);
+    }
+    const chance = m(x, y, z).chance || calculateRarity(ores[ore], y, x, z);
+    const displayName = `${m(x, y, z).prefix ? m(x, y, z).prefix + " " : ""}${m(x, y, z).name || ores[ore].name}`;
+    if (!m(x, y, z).placed && (chance <= 1e-6 || tiers[ores[ore].tier].maxChance <= 1e-6 || (tiers[ores[ore].tier].global && !ores[ore].noGlobal)) && chance !== 0 && !m(x, y, z).isVein && !m(x, y, z).isGeode) {
+        let footerText = "";
+        if (m(x, y, z).traits) {
+            const originalChance = chance / m(x, y, z).traits.reduce((acc, trait) => acc * (traits[trait].chance || 1), 1);
+            footerText += `${formatChance(originalChance)} chance for the ore to spawn`;
+            for (let i = 0; i < m(x, y, z).traits.length; i++) {
+                const trait = m(x, y, z).traits[i];
+                footerText += `\n${formatChance(traits[trait].chance)} chance to be ${traits[trait].appendName ? "a " : ""}${traits[trait].name.toLowerCase()}`;
+            }
+        }
+        
+        if (ores[ore].caveExclusive) {
+            if (ores[ore].caveExclusive === -1) footerText += `\nNever spawns in caves`;
+            else footerText += `\nOnly spawns in caves`;
+        }
+        if (m(x, y, z).conditionLabel) footerText += `\n${m(x, y, z).conditionLabel}`;
+        footerText = footerText.trim();
+        let footer;
+        if (footerText) footer = {text: footerText};
+        
+        webhookMessage(`${username} has found ${displayName}!`, `**Tier:** ${tiers[ores[ore].tier].name}`, ore, chance, y, footer);
+    }
+    
+    if (!m(x, y, z).placed) {
+        stats.totalOresMined++;
+        stats.oresMined[ore] = (stats.oresMined[ore] || 0) + 1;
+        
+        if (chance !== 0 && 1 / chance > stats.lowestRNG) {
+            stats.lowestRNG = 1 / chance;
+        }
+        if (chance !== 0 && 1 / chance > stats.lowestOreRNG) {
+            stats.lowestOreRNG = 1 / chance;
+        }
+    }
+    
+    if (ores[ore].onBreak) ores[ore].onBreak(x, y, z, inventory);
+    removeOre(x, y, z);
+    generateAdjacent(x, y, z);
+    
+    if (!settings.noExplosion && inventory.currentPickaxe.explosion) {
+        const radius = inventory.currentPickaxe.explosion.radius || 1;
+        if (Math.random() < (inventory.currentPickaxe.explosion.chance || 1)) {
+            for (let x1 = x - radius; x1 <= x + radius; x1++) {
+                for (let y1 = y - radius; y1 <= y + radius; y1++) {
+                    for (let z1 = z - radius; z1 <= z + radius; z1++) {
+                        const r = Math.sqrt((x1 - x) ** 2 + (y1 - y) ** 2 + (z1 - z) ** 2);
+                        if (r < radius) {
+                            let exists;
+                            if (m(x1, y1, z1)) {
+                                const oreData = m(x1, y1, z1);
+                                if (oreAt(x1, y1, z1) && ores[oreData.ore]) exists = true;
+                            } else {
+                                spawnOre(x1, y1, z1);
+                                if (oreAt(x1, y1, z1)) exists = true;
+                            }
+                            
+                            if (exists) {
+                                let progress = m(x1, y1, z1).progress || 0;
+                                progress += (inventory.currentPickaxe.explosion.power || calculatePower(x, y, z) || 1) / r / m(x1, y1, z1).str;
+                                if (progress >= 1) {
+                                    updateBreakMesh(x1, y1, z1, undefined, 2);
+                                    mine(x1, y1, z1, {noExplosion: true});
+                                } else setProgress(x1, y1, z1, false, progress);
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    }
+    if (inventory.currentPickaxe.onMine) {
+        inventory.currentPickaxe.onMine(x, y, z);
+    }
+    stats.toolsUsed[inventory.currentPickaxe.id] = (stats.toolsUsed[inventory.currentPickaxe.id] || 0) + 1;
+}
+
+function rightClick() {
+    const raycaster = perspectiveCamera.getForwardRay();
+    const hit = scene.pickWithRay(raycaster, pickPredicate);
+    const used = useSelectedItem();
+
+    const picked = getPickedOreCoords(hit);
+    if (!picked) return;
+    const relativeFace = hit.getNormal(false);
+    if (!relativeFace) return;
+    let rightClickFunc = false;
+    
+    if (!used && hit.hit) {
+        const {x, y, z} = picked;
+        
+        if (ores[m(x, y, z).ore].onUse) {
+            ores[m(x, y, z).ore].onUse(x, y, z);
+            rightClickFunc = true;
+            return;
+        }
+        
+        const {x: dx, y: dy, z: dz} = relativeFace;
+        const newX = x + dx, newY = y + dy, newZ = z + dz;
+        const bg = !(ores[inventory.hotbar[inventory.SELECTED_HOTBAR]] && ores[inventory.hotbar[inventory.SELECTED_HOTBAR]].singleLayer) ? getOre(newX, newY, newZ).bg : inventory.hotbar[inventory.SELECTED_HOTBAR];
+        
+        if (inventory.getCount(inventory.hotbar[inventory.SELECTED_HOTBAR]) > 0 && ores[inventory.hotbar[inventory.SELECTED_HOTBAR]] && (!oreAt(newX, newY, newZ))) {
+            const placeSets = {isGeode: false, isVein: false, placed: true, forced: true};
+            if (ores[inventory.hotbar[inventory.SELECTED_HOTBAR]].placeSettings?.rotate?.allAxes) {
+                // convert rotationVector to an angle pointing away from the face it was placed on (assuming default is y+)
+                const up = new BABYLON.Vector3(0, 1, 0);
+                const axis = up.cross(relativeFace).normalize();
+                const angle = Math.acos(up.dot(relativeFace));
+                placeSets.rotation = { x: axis.x * angle, y: axis.y * angle, z: axis.z * angle };
+                if (relativeFace.y === -1) {
+                    placeSets.rotation = { x: Math.PI, y: 0, z: 0 };
+                }
+            }
+            
+            generateOre(newX, newY, newZ, inventory.hotbar[inventory.SELECTED_HOTBAR], bg ?? "shale", placeSets);
+
+            if (checkCollision(player.position)) removeOre(newX, newY, newZ, placeSets);
+            else inventory.addItem(inventory.hotbar[inventory.SELECTED_HOTBAR], -1);
+        }
+    }
+    
+}
+
+function useSelectedItem() {
+    const oldNV = player.nightVision;
+    const id = inventory.hotbar[inventory.SELECTED_HOTBAR];
+    if (items[id] && items[id].onUse && inventory.getCount(id) > 0) {
+        items[id].onUse();
+        stats.itemsUsed[id] = (stats.itemsUsed[id] || 0) + 1;
+        
+        if (oldNV !== player.nightVision) {
+            if (!player.nightVision) {
+                cameraLight.diffuse = ambientLight.color;
+                cameraLight.intensity = ambientLight.intensity * 6;
+                document.getElementById("nightVisionOverlay").style.display = "none";
+            } else {
+                cameraLight.diffuse = new BABYLON.Color3.FromHexString("#91eb36");
+                cameraLight.intensity = 5;
+                document.getElementById("nightVisionOverlay").style.display = "block";
+            }
+        }
+        return true;
+    }
+    return false;
+}
 
 function start() {
     locations[0][1] = topLayer(locations[0][0], locations[0][2]) + 1;
     player.position.y = locations[0][1] + 1;
-
+    
     for (let i = 0; i < locations.length; i++) {
         const location = locations[i];
         const [x, y, z] = location;
         generateOre(x, y - 1, z, "blackWall", "grass", {traits: ["protected"]});
     }
+    
+    // start logo css animation
+    function startAnimations() {
+        setTimeout(() => {
+            document.getElementById("logo").style.display = "";
+            document.getElementById("logo").style.animation = "initLogo 4s ease-in-out";
+            document.getElementById("logo").style.animationFillMode = "forwards";
+            setTimeout(() => {
+                document.getElementById("menu-mask").style.animation = "initMask 2.4s ease-in-out";
+                document.getElementById("menu-mask").style.animationFillMode = "forwards";
+            }, 1600);
+        }, 0);
+    }
+    requestAnimationFrame(startAnimations);
 }
 start();
+
+function pause() {
+    vars.PAUSED = true;
+    document.getElementById("logo-container").style.visibility = "visible";
+    document.getElementById("main-menu").style.display = "block";
+    document.getElementById("bgm").pause();
+}
 
 let direction = new BABYLON.Vector3();
 const jumpSpeed = 0.16;
@@ -499,7 +1440,12 @@ let canJump = false;
 let gravity = 0.01;
 let lastStepDist = 0;
 
+function pickPredicate(mesh) {
+    return mesh.metadata?.type === "ore";
+}
+
 engine.runRenderLoop(() => {
+    if (vars.PAUSED) return;
     FRAME_TIME = Math.min((performance.now() - LAST_FRAME) / 1000, 0.1); // cap frame time to prevent huge lag spikes
     LAST_FRAME = performance.now();
     vars.FRAME_TIME = FRAME_TIME;
@@ -515,7 +1461,7 @@ engine.runRenderLoop(() => {
     
     direction.normalize();
     direction = BABYLON.Vector3.TransformNormal(direction, perspectiveCamera.getWorldMatrix().getRotationMatrix());
-    direction.y = 0;
+    if (!vars.fly) direction.y = 0;
     direction.normalize();
     
     if (STARTED) {
@@ -911,14 +1857,17 @@ engine.runRenderLoop(() => {
                 vars.fogColor = area.fogColor || "#000000";
                 vars.nightFogColor = area.nightFogColor || vars.fogColor;
                 
-                hemisphereLight.diffuse = new BABYLON.Color3.FromHexString(area.lighting.hemisphereColor || area.lighting.color || "#fff");
-                hemisphereLight.groundColor = new BABYLON.Color3.FromHexString(area.lighting.hemisphereGroundColor || "#000");
+                hemisphereLight.diffuse = getColor(area.lighting.hemisphereColor || area.lighting.color || "#ffffff");
+                hemisphereLight.groundColor = getColor(area.lighting.hemisphereGroundColor || "#000000");
                 hemisphereLight.intensity = area.lighting.hemisphereIntensity ?? area.lighting.intensity ?? 0;
+                
+                vars.ambientLightIntensity = hemisphereLight.intensity;
                 
                 if (!player.nightVision) {
                     cameraLight.diffuse = area.lighting.cameraLightColor !== undefined ? area.lighting.cameraLightColor : hemisphereLight.diffuse;
-                    cameraLight.intensity = area.lighting.cameraLightIntensity !== undefined ? area.lighting.cameraLightIntensity : hemisphereLight.intensity * 6;
-                    cameraLight.decay = area.lighting.cameraLightDecay !== undefined ? area.lighting.cameraLightDecay : 1;
+                    cameraLight.intensity = area.lighting.cameraLightIntensity !== undefined ? area.lighting.cameraLightIntensity : hemisphereLight.intensity * 3;
+                    // cameraLight.decay = area.lighting.cameraLightDecay !== undefined ? area.lighting.cameraLightDecay : 1;
+                    cameraLight.range = 15;
                 }
                 
                 vars.lighting = {
@@ -961,15 +1910,16 @@ engine.runRenderLoop(() => {
     if (sun.visible) {
         skyboxMaterial.reflectionTexture = textures["skybox/space"];
         if (sunHeight < -0.2) {
-            scene.fogColor = new BABYLON.Color3.FromHexString(nightFog);
+            scene.fogColor = getColor(nightFog);
+            hemisphereLight.intensity = 0;
             skyboxMaterial.alpha = 1;
         } else if (sunHeight < 0.2) {
-            scene.fogColor = BABYLON.Color3.Lerp(new BABYLON.Color3.FromHexString(vars.fogColor), new BABYLON.Color3.FromHexString(nightFog), (0.2 - sunHeight) / 0.4);
-            // ambientLight.intensity = vars.ambientLightIntensity * (sunHeight + 0.2) / 0.4;
+            scene.fogColor = BABYLON.Color3.Lerp(getColor(vars.fogColor), getColor(nightFog), (0.2 - sunHeight) / 0.4);
+            hemisphereLight.intensity = vars.ambientLightIntensity * (sunHeight + 0.2) / 0.4;
             if (CURRENT_LAYER !== "space") skyboxMaterial.alpha = Math.min(Math.max(0.8 - sunHeight / 0.2, 0), 1);
         } else {
-            scene.fogColor = new BABYLON.Color3.FromHexString(vars.fogColor);
-            // ambientLight.intensity = vars.ambientLightIntensity;
+            scene.fogColor = getColor(vars.fogColor);
+            hemisphereLight.intensity = vars.ambientLightIntensity;
             if (CURRENT_LAYER !== "space") skyboxMaterial.alpha = 0;
         }
         
@@ -981,38 +1931,68 @@ engine.runRenderLoop(() => {
             sun.material.alpha = 1;
         }
     } else {
-        scene.fogColor = BABYLON.Color3.Lerp(new BABYLON.Color3.FromHexString(vars.fogColor), new BABYLON.Color3.FromHexString(nightFog), Math.min(Math.max((0.2 - sunHeight) / 0.4, 0), 1));
+        scene.fogColor = BABYLON.Color3.Lerp(getColor(vars.fogColor), getColor(nightFog), Math.min(Math.max((0.2 - sunHeight) / 0.4, 0), 1));
     }
     
     directionalLight.position.copyFrom(offset.scale(1));
     directionalLight.setDirectionToTarget(BABYLON.Vector3.Zero());
     sun.position.copyFrom(perspectiveCamera.position).addInPlace(offset);
+
+    function hide() {
+        document.getElementById("tooltip").style.display = "none";
+        vars.miningStartTime = undefined;
+        LAST_ORE = [];
+        CURRENT_ORE = [];
+    }
     
     // raycasting
     const raycaster = perspectiveCamera.getForwardRay();
-    const hit = scene.pickWithRay(raycaster);
+    const hit = scene.pickWithRay(raycaster, pickPredicate);
     if (hit.hit) {
-        const oreData = ores[hit.pickedMesh.metadata?.ore], color = oreData?.color || "#fff";
-        document.getElementById("oreName").textContent = `${oreData?.name || "Unknown"}`;
-        document.getElementById("tooltip").style.display = "";
-        if (color[0] === "#") {
-            document.getElementById("oreName").style.color = color;
-            document.getElementById("oreName").style.textShadow = "";
-            document.getElementById("oreName").style.backgroundImage = "none";
-        } else {
-            document.getElementById("oreName").style.color = "transparent";
-            document.getElementById("oreName").style.textShadow = "none";
-            document.getElementById("oreName").style.backgroundImage = color;
+        const picked = getPickedOreCoords(hit);
+        if (!picked) {
+            hide();
+            return;
         }
+        const {x, y, z, oreData} = picked;
+        if (JSON.stringify(LAST_ORE.slice(0, 4)) !== JSON.stringify([x, y, z, oreData.ore])) LAST_ORE = [x, y, z, oreData.ore, hit.distance];
         
-        const {x, y, z} = hit.pickedMesh.metadata?.coords?.[hit.thinInstanceIndex] ?? hit.pickedMesh.metadata?.coords ?? {};
-        
-        document.getElementById("debugInfo").textContent = `${x}, ${y}, ${z}`;
+        if (hit.distance <= inventory.currentPickaxe.range) {
+            const oreData = ores[hit.pickedMesh.metadata?.ore], color = oreData?.color || "#fff";
+            document.getElementById("oreName").textContent = `${oreData?.name || "Unknown"}`;
+            document.getElementById("tooltip").style.display = "";
+            if (color[0] === "#") {
+                document.getElementById("oreName").style.color = color;
+                document.getElementById("oreName").style.textShadow = "";
+                document.getElementById("oreName").style.backgroundImage = "none";
+            } else {
+                document.getElementById("oreName").style.color = "transparent";
+                document.getElementById("oreName").style.textShadow = "none";
+                document.getElementById("oreName").style.backgroundImage = color;
+            }
+            
+            let chance = m(x, y, z).chance ?? 0;
+            
+            if (MINING) miningTick();
+            
+            document.getElementById("debugInfo").textContent = `${x}, ${y}, ${z}`;
+            document.getElementById("oreRarity").textContent = m(x, y, z).placed ? `Placed by ${window.username || "you"}` : (isFinite(chance) && Math.abs(chance) !== 0 ? formatChance(chance) : "");
+            document.getElementById("oreRarity").style.color = tiers[ores[m(x, y, z).ore]?.tier]?.color ?? "#fff";
+            document.getElementById("oreRarity").style.display = "block";
+            
+            document.getElementById("oreDesc").textContent = ores[m(x, y, z).ore]?.desc ?? "No description available.";
+            document.getElementById("miningTime").innerText = formatTime((m(x, y, z).str) / calculatePower(x, y, z) * (1 - (m(x, y, z).progress || 0))).replace("Infinity", "Unbreakable") + " + " + formatTime(inventory.currentPickaxe.delay);
+        } else {
+            hide();
+        }
     } else {
-        document.getElementById("tooltip").style.display = "none";
+        hide();
     }
-
+    
+    updateTopLeft();
+    
     scene.clearColor = scene.fogColor;
+    scene.fogColor = scene.clearColor;
     scene.render();
 });
 

@@ -370,6 +370,7 @@ export function calculateChance(y, interval, x, z, disregardCondition, adjusted,
 }
 
 export function calculateRarity(ore, y, x, z) {
+    if (!ore) return undefined;
     if (typeof ore.chance === "object") {
         if (!Array.isArray(ore.chance)) {
             if (y < ore.minY || y > ore.maxY) return 0;

@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<html lang="en">
+<html lang="en" oncontextmenu="return false;">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
@@ -12,6 +12,10 @@
     <meta property="og:site_name" content="The Draconic Depths (Babylon.JS Edition)">
 </head>
 <body>
+    <div id="menu-mask"></div>
+    <div id="logo-container" class="fullsize">
+        <img id="logo" src="img/logo.png" alt="The Draconic Depths Logo">
+    </div>
     <div id="logo-container" class="fullsize">
         <img id="logo" src="img/logo.png" alt="The Draconic Depths Logo">
     </div>
@@ -104,10 +108,10 @@
         </div>
         <div id="tooltip">
             <span id="oreName">None</span><br>
-            <span id="oreRarity"></span><br>
+            <span id="oreRarity">1 in X</span><br>
             <i><span id="oreDesc">N/A</span></i><br>
             <span id="debugInfo"></span>
-            <span id="miningTime" style="display: none;">5.2 sec</span>
+            <span id="miningTime">5.2 sec</span>
             <progress id="mining-progress" value="0" max="100" style="display: none;"></progress>
         </div>
         <span id="equip-text" style="display: none;">Select a hotbar slot!</span>

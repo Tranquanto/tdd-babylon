@@ -49,9 +49,9 @@ const vars = {
                 
                 if (deathMessages[source]) {
                     const msg = typeof deathMessages[source] === "function" ? deathMessages[source](vars.username) : Array.isArray(deathMessages[source]) ? deathMessages[source][Math.floor(Math.random() * deathMessages[source].length)] : deathMessages[source];
-                    displayAlert(msg.replaceAll("%s", vars.username), "#f44", 5000);
+                    // displayAlert(msg.replaceAll("%s", vars.username), "#f44", 5000);
                 } else {
-                    displayAlert(`${vars.username} died (source: ${source})`, "#f44", 5000);
+                    // displayAlert(`${vars.username} died (source: ${source})`, "#f44", 5000);
                 }
             }
         }

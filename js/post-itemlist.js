@@ -1,9 +1,9 @@
 import vars, { airAt } from "./outside_stuff.js";
 import { items, layers, ores, structures, biomes, locations, topLayer } from "./content/items.js";
 import { isCave } from "./noise.js";
+import { teleport } from "./main.js";
 
 const generateOre = () => undefined;
-const teleport = generateOre;
 const spawnAlert = generateOre;
 
 function tpMenu(locations = locations) {

@@ -297,7 +297,7 @@ let ores = {
     // surface or above
     plastic: {
         name: "Plastic",
-        color: "#f88",
+        color: "#ff8888",
         chance: 0.004,
         maxY: maxHeight + 1,
         minY: minHeight + 1,

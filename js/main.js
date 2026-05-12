@@ -5,7 +5,7 @@ import { getOre, m, oreAt, checkAdjacent, calculatePower, airAt, calculateRarity
 import { getLayer, items, layers, locations, ores, structureArray, structures, tiers, traits } from "./content/items.js";
 import { biomes, topLayer } from "./content/layers.js";
 import { isCave, CHUNK3_RATE, CHUNK_SIZE_3, CHUNK_SIZE, noise } from "./noise.js";
-import { inventory, unlockAchievement } from "./inventory.js";
+import { inventory, toggleInventory, unlockAchievement } from "./inventory.js";
 import { rand01 } from "./perlin.js";
 
 const { player, stats, camera } = vars;
@@ -28,16 +28,9 @@ let lightArr = [], radArr = [], repairArr = [], repairObj = {}, lightKeys = {};
 let USE_THIN_INSTANCES = true;
 let totalOres = 0;
 
-function resize() {
-    canvas.width = window.innerWidth;
-    canvas.height = window.innerHeight;
-}
-
-window.addEventListener("resize", resize);
-resize();
-
 // set up scene and camera
-const engine = new BABYLON.Engine(canvas, true);
+const engine = navigator.gpu ? new BABYLON.WebGPUEngine(canvas, {antialias: true}) : new BABYLON.Engine(canvas, true);
+await engine.initAsync();
 const scene = new BABYLON.Scene(engine);
 const perspectiveCamera = new BABYLON.UniversalCamera("camera1", new BABYLON.Vector3(0, 2, 0), scene);
 perspectiveCamera.maxZ = 1000;
@@ -60,6 +53,18 @@ pipeline.fxaa.samples = 4;
 const ssao = new BABYLON.SSAO2RenderingPipeline("ssao", scene, 0.75, [perspectiveCamera]);
 ssao.radius = 1;
 window.ssao = ssao;
+
+let geigerAudio = new Audio("audio/geiger.mp3");
+
+function resize() {
+    canvas.width = window.innerWidth;
+    canvas.height = window.innerHeight;
+
+    engine.resize(true);
+}
+
+window.addEventListener("resize", resize);
+resize();
 
 // movement
 const keys = {
@@ -268,7 +273,7 @@ sunMaterial.disableLighting = true;
 sun.material = sunMaterial;
 
 function getTime() {
-    return -1.7;
+    // return -1.7; // midnight
     if (vars.timeOverride !== undefined) return vars.timeOverride;
     const dayLength = 1800000; // milliseconds for a full day cycle
     return (Date.now() / dayLength * Math.PI * 2) % (Math.PI * 2);
@@ -296,6 +301,7 @@ function createLightContainer(key) {
     
     const container = new BABYLON.ClusteredLightContainer(`lightContainer${key}`, [], scene);
     container.falloffType = BABYLON.Light.FALLOFF_PHYSICAL;
+
     lightContainers[key] = container;
     return container;
 }
@@ -411,15 +417,46 @@ function getTexture(ore) {
 function generateOre(x, y, z, ore, bg, settings) {
     if (!ores[ore]) return;
     x = Math.round(x), y = Math.round(y), z = Math.round(z);
-    if (oreAt(x, y, z) && !settings.forceReplace && !m(x, y, z).temp) return;
-    if (airAt(x, y, z) && !settings.forced && !m(x, y, z).temp) return;
+    if (oreAt(x, y, z) && !settings.forcedReplace) {
+        return m(x, y, z);
+    } else if (airAt(x, y, z) && !settings.forced && !m(x, y, z)?.temp) {
+        return m(x, y, z);
+    } else if (!m(x, y, z)?.temp && ores[ore]) {
+        removeOre(x, y, z, {fullyRemove: true});
+    }
+    if (ore === undefined || ore === null) {
+        if (!m(x, y, z)?.temp) m(x, y, z, true);
+        return;
+    }
     if (!settings) settings = {};
     settings = JSON.parse(JSON.stringify(settings));
     
     if (!settings.offset) settings.offset = {x: 0, y: 0, z: 0};
-    if (!settings.offset.x) settings.offset.x = 0;
-    if (!settings.offset.y) settings.offset.y = 0;
-    if (!settings.offset.z) settings.offset.z = 0;
+    if (nd(settings.offset.x)) settings.offset.x = 0;
+    if (nd(settings.offset.y)) settings.offset.y = 0;
+    if (nd(settings.offset.z)) settings.offset.z = 0;
+
+    if (!settings.scale) settings.scale = {x: 1, y: 1, z: 1}; // test
+    if (nd(settings.scale.x)) settings.scale.x = 1;
+    if (nd(settings.scale.y)) settings.scale.y = 1;
+    if (nd(settings.scale.z)) settings.scale.z = 1;
+
+    if (ores[ore].scale) {
+        settings.scale.x *= ores[ore].scale.x ?? 1;
+        settings.scale.y *= ores[ore].scale.y ?? 1;
+        settings.scale.z *= ores[ore].scale.z ?? 1;
+    }
+
+    if (!settings.rotation) {
+        settings.rotation = { x: 0, y: Math.floor(Math.random() * 4) * Math.PI / 2, z: 0 };
+        if (ores[ore]) {
+            if (ores[ore].rotation) settings.rotation = JSON.parse(JSON.stringify(ores[ore].rotation));
+            else if (ores[ore].noRandomRotation) settings.rotation.y = 0;
+        }
+    }
+    if (nd(settings.rotation.x)) settings.rotation.x = 0;
+    if (nd(settings.rotation.y)) settings.rotation.y = 0;
+    if (nd(settings.rotation.z)) settings.rotation.z = 0;
     
     let count = meshCounts[`${ore}_${bg}`] || 0;
     
@@ -495,7 +532,7 @@ function generateOre(x, y, z, ore, bg, settings) {
     
     // create an instance of the mesh for better performance
     if (USE_THIN_INSTANCES) {
-        const matrix = BABYLON.Matrix.Translation(x, y, z);
+        const matrix = BABYLON.Matrix.Scaling(settings.scale.x, settings.scale.y, settings.scale.z).multiply(BABYLON.Matrix.RotationYawPitchRoll(settings.rotation.y, settings.rotation.x, settings.rotation.z)).multiply(BABYLON.Matrix.Translation(x + settings.offset.x, y + settings.offset.y, z + settings.offset.z));
         meshes[`${ore}_${bg}_${count}`].thinInstanceAdd(matrix);
         const index = meshes[`${ore}_${bg}_${count}`].thinInstanceCount - 1;
         meshes[`${ore}_${bg}_${count}`].metadata.coords[index] = {x, y, z};
@@ -504,10 +541,23 @@ function generateOre(x, y, z, ore, bg, settings) {
         instance.position = new BABYLON.Vector3(x, y, z);
         instance.metadata = {ore, background: bg, coords: {x, y, z}};
     }
+
+    let bounds = new BABYLON.Vector3(
+        settings.scale.x * (ores[ore].boundingBox?.x || 1),
+        settings.scale.y * (ores[ore].boundingBox?.y || 1),
+        settings.scale.z * (ores[ore].boundingBox?.z || 1)
+    );
+    // apply rotation to bounds
+    if (settings.rotation) {
+        bounds.rotateByQuaternionToRef(BABYLON.Quaternion.FromEulerVector(new BABYLON.Vector3(settings.rotation.x, settings.rotation.y, settings.rotation.z)), bounds);
+        bounds = new BABYLON.Vector3(Math.abs(bounds.x), Math.abs(bounds.y), Math.abs(bounds.z));
+    }
+
     m(x, y, z, {
         ore, background: bg,
         offset: settings.offset,
-        bounds: settings.bounds || {x: 1, y: 1, z: 1},
+        bounds: bounds ?? {x: 1, y: 1, z: 1},
+        rotation: settings.rotation,
         chance: settings.chance,
         str,
         meshID: `${ore}_${bg}_${count}`,
@@ -540,9 +590,9 @@ function generateOre(x, y, z, ore, bg, settings) {
         const pointLight = new BABYLON.PointLight(light.name, light.position, scene);
         pointLight.diffuse = light.color;
         pointLight.intensity = light.intensity;
-        pointLight.range = light.distance;
+        pointLight.range = light.distance + 1;
         pointLight.id = light.name;
-        lightKeys[`${x}_${y}_${z}`] = pointLight.id;
+        lightKeys[`${x}_${y}_${z}`] = pointLight;
         
         const container = createLightContainer(getChunkKey(x, y, z, 64), 64);
         
@@ -589,6 +639,9 @@ function removeOre(x, y, z, settings = {}) {
                         mesh.metadata.coords[index] = mesh.metadata.coords.pop();
                         mesh.metadata.coords.length = mesh.thinInstanceCount;
                     }
+                    if (mesh._thinInstanceDataStorage) {
+                        mesh._thinInstanceDataStorage.worldMatrices = null;
+                    }
                     mesh.thinInstanceRefreshBoundingInfo();
                     
                     // remove any audio and light associated with this ore
@@ -603,7 +656,7 @@ function removeOre(x, y, z, settings = {}) {
                         if (idx !== -1) lightArr.splice(idx, 1);
                         /** @type {BABYLON.ClusteredLightContainer} */
                         const container = lightContainers["0"];
-                        const pointLight = scene.getLightById(lightKeys[`${x}_${y}_${z}`]);
+                        const pointLight = lightKeys[`${x}_${y}_${z}`];
                         if (pointLight) {
                             pointLight.intensity = 0;
                             scene.removeLight(pointLight);
@@ -714,7 +767,7 @@ window.removeOre = removeOre;
 
 function spawnOre(x, y, z, settings) {
     if (settings === undefined) settings = {caveExclusive: false, noCave: false};
-    if (m(x, y, z) && !settings.forced && !settings.forceReplace && !m(x, y, z).temp) return false;
+    if (m(x, y, z) && !settings.forced && !settings.forceReplace /*&&  !m(x, y, z).temp */) return false;
     if (typeof settings === "string") settings = {caveExclusive: true, noCave: true, caveType: settings};
     const layer = getLayer(y, x, z, false);
     if (layers[layer]?.universalCondition && !layers[layer].universalCondition(x, y, z) && !m(x, y, z)) {
@@ -1064,6 +1117,7 @@ function generateChunk3(x, y, z, noCave = false) { // used for places like space
 
 function loadNearbyChunks() {
     const playerX = perspectiveCamera.position.x,
+    playerY = perspectiveCamera.position.y,
     playerZ = perspectiveCamera.position.z;
     
     function chunkToPlayer(a) {
@@ -1072,15 +1126,19 @@ function loadNearbyChunks() {
     
     function chunkToPlayer3(a) {
         const [ax, ay, az] = a.split("_").map(Number);
-        return Math.abs(ax * CHUNK_SIZE_3 - playerX) + Math.abs(ay * CHUNK_SIZE_3 - (player.position.y)) + Math.abs(az * CHUNK_SIZE_3 - playerZ);
+        return Math.abs(ax * CHUNK_SIZE_3 - playerX) + Math.abs(ay * CHUNK_SIZE_3 - (playerY)) + Math.abs(az * CHUNK_SIZE_3 - playerZ);
     }
     
     if (!vars.PAUSED) {
         const GEN_SIZE = Math.ceil(GENERATION_DISTANCE / CHUNK_SIZE);
-        for (let x = -GEN_SIZE; x < GEN_SIZE; x++) {
-            for (let z = -GEN_SIZE; z < GEN_SIZE; z++) {
-                generatingChunks.push(`${Math.floor(playerX / CHUNK_SIZE) + x}_${Math.floor(playerZ / CHUNK_SIZE) + z}`);
+        if (playerY > topLayer(playerX, playerZ) - 4 && playerY < layers.sky.min + 0.5) {
+            for (let x = -GEN_SIZE; x < GEN_SIZE; x++) {
+                for (let z = -GEN_SIZE; z < GEN_SIZE; z++) {
+                    generatingChunks.push(`${Math.floor(playerX / CHUNK_SIZE) + x}_${Math.floor(playerZ / CHUNK_SIZE) + z}`);
+                }
             }
+        } else {
+            generatingChunks.length = 0;
         }
         
         generatingChunks = Array.from(new Set(generatingChunks.filter(g => !generatedChunks.has(g) && chunkToPlayer(g) < GENERATION_DISTANCE)));
@@ -1120,9 +1178,9 @@ function loadNearbyChunks() {
         
         // if (player.position.y > layers.sky.min - 15 && player.position.y < layers.space.max || layers[CURRENT_LAYER]?.chunks === "3d") {
         const playerPosChunk = {
-            x: Math.floor(perspectiveCamera.position.x / CHUNK_SIZE_3),
-            y: Math.floor(player.position.y / CHUNK_SIZE_3),
-            z: Math.floor(perspectiveCamera.position.z / CHUNK_SIZE_3)
+            x: Math.floor(playerX / CHUNK_SIZE_3),
+            y: Math.floor(playerY / CHUNK_SIZE_3),
+            z: Math.floor(playerZ / CHUNK_SIZE_3)
         };
         
         const GEN_RADIUS = layers[CURRENT_LAYER]?.chunkRadius || Math.ceil(GENERATION_DISTANCE / CHUNK_SIZE_3 / 4);
@@ -1276,7 +1334,7 @@ function mine(x, y, z, settings = {}) {
         let footer;
         if (footerText) footer = {text: footerText};
         
-        webhookMessage(`${username} has found ${displayName}!`, `**Tier:** ${tiers[ores[ore].tier].name}`, ore, chance, y, footer);
+        // webhookMessage(`${username} has found ${displayName}!`, `**Tier:** ${tiers[ores[ore].tier].name}`, ore, chance, y, footer);
     }
     
     if (!m(x, y, z).placed) {
@@ -1339,7 +1397,10 @@ function rightClick() {
 
     const picked = getPickedOreCoords(hit);
     if (!picked) return;
-    const relativeFace = hit.getNormal(false);
+    /** @type {BABYLON.Mesh} */
+    const mesh = hit.pickedMesh;
+    const matrix = mesh.thinInstanceGetWorldMatrices()[hit.thinInstanceIndex];
+    const relativeFace = hit.getNormal(false).rotateByQuaternionToRef(BABYLON.Quaternion.FromRotationMatrix(matrix), new BABYLON.Vector3());
     if (!relativeFace) return;
     let rightClickFunc = false;
     
@@ -1859,7 +1920,7 @@ engine.runRenderLoop(() => {
                 
                 hemisphereLight.diffuse = getColor(area.lighting.hemisphereColor || area.lighting.color || "#ffffff");
                 hemisphereLight.groundColor = getColor(area.lighting.hemisphereGroundColor || "#000000");
-                hemisphereLight.intensity = area.lighting.hemisphereIntensity ?? area.lighting.intensity ?? 0;
+                hemisphereLight.intensity = (area.lighting.hemisphereIntensity ?? area.lighting.intensity ?? 0) / 4;
                 
                 vars.ambientLightIntensity = hemisphereLight.intensity;
                 
@@ -1951,42 +2012,85 @@ engine.runRenderLoop(() => {
     if (hit.hit) {
         const picked = getPickedOreCoords(hit);
         if (!picked) {
+            console.log("Error: Hit an ore mesh but couldn't get coordinates", hit);
             hide();
-            return;
-        }
-        const {x, y, z, oreData} = picked;
-        if (JSON.stringify(LAST_ORE.slice(0, 4)) !== JSON.stringify([x, y, z, oreData.ore])) LAST_ORE = [x, y, z, oreData.ore, hit.distance];
-        
-        if (hit.distance <= inventory.currentPickaxe.range) {
-            const oreData = ores[hit.pickedMesh.metadata?.ore], color = oreData?.color || "#fff";
-            document.getElementById("oreName").textContent = `${oreData?.name || "Unknown"}`;
-            document.getElementById("tooltip").style.display = "";
-            if (color[0] === "#") {
-                document.getElementById("oreName").style.color = color;
-                document.getElementById("oreName").style.textShadow = "";
-                document.getElementById("oreName").style.backgroundImage = "none";
-            } else {
-                document.getElementById("oreName").style.color = "transparent";
-                document.getElementById("oreName").style.textShadow = "none";
-                document.getElementById("oreName").style.backgroundImage = color;
-            }
-            
-            let chance = m(x, y, z).chance ?? 0;
-            
-            if (MINING) miningTick();
-            
-            document.getElementById("debugInfo").textContent = `${x}, ${y}, ${z}`;
-            document.getElementById("oreRarity").textContent = m(x, y, z).placed ? `Placed by ${window.username || "you"}` : (isFinite(chance) && Math.abs(chance) !== 0 ? formatChance(chance) : "");
-            document.getElementById("oreRarity").style.color = tiers[ores[m(x, y, z).ore]?.tier]?.color ?? "#fff";
-            document.getElementById("oreRarity").style.display = "block";
-            
-            document.getElementById("oreDesc").textContent = ores[m(x, y, z).ore]?.desc ?? "No description available.";
-            document.getElementById("miningTime").innerText = formatTime((m(x, y, z).str) / calculatePower(x, y, z) * (1 - (m(x, y, z).progress || 0))).replace("Infinity", "Unbreakable") + " + " + formatTime(inventory.currentPickaxe.delay);
         } else {
-            hide();
+            const {x, y, z, oreData} = picked;
+            if (JSON.stringify(LAST_ORE.slice(0, 4)) !== JSON.stringify([x, y, z, oreData.ore])) LAST_ORE = [x, y, z, oreData.ore, hit.distance];
+            
+            if (hit.distance <= inventory.currentPickaxe.range) {
+                const oreData = ores[hit.pickedMesh.metadata?.ore], color = oreData?.color || "#fff";
+                document.getElementById("oreName").textContent = `${oreData?.name || "Unknown"}`;
+                document.getElementById("tooltip").style.display = "";
+                if (color[0] === "#") {
+                    document.getElementById("oreName").style.color = color;
+                    document.getElementById("oreName").style.textShadow = "";
+                    document.getElementById("oreName").style.backgroundImage = "none";
+                } else {
+                    document.getElementById("oreName").style.color = "transparent";
+                    document.getElementById("oreName").style.textShadow = "none";
+                    document.getElementById("oreName").style.backgroundImage = color;
+                }
+                
+                let chance = m(x, y, z).chance ?? 0;
+                
+                if (MINING) miningTick();
+                
+                document.getElementById("debugInfo").textContent = `${x}, ${y}, ${z}`;
+                document.getElementById("oreRarity").textContent = m(x, y, z).placed ? `Placed by ${window.username || "you"}` : (isFinite(chance) && Math.abs(chance) !== 0 ? formatChance(chance) : "");
+                document.getElementById("oreRarity").style.color = tiers[ores[m(x, y, z).ore]?.tier]?.color ?? "#fff";
+                document.getElementById("oreRarity").style.display = "block";
+                
+                document.getElementById("oreDesc").textContent = oreData?.desc ?? "No description available.";
+                document.getElementById("miningTime").innerText = formatTime((m(x, y, z).str) / calculatePower(x, y, z) * (1 - (m(x, y, z).progress || 0))).replace("Infinity", "Unbreakable") + " + " + formatTime(inventory.currentPickaxe.delay);
+            } else {
+                hide();
+            }
         }
     } else {
         hide();
+    }
+
+    // hp + radiation
+    player.health += FRAME_TIME; // health regeneration
+    let netChange = player.radiation + 0;
+    player.radiation *= 0.95 ** FRAME_TIME; // decay radiation over time
+    player.radiation -= 0.3 * FRAME_TIME; // slight radiation loss over time
+    netChange = player.radiation - netChange;
+    for (let i = 0; i < radArr.length; i++) {
+        const source = radArr[i];
+        const dist = player.position.distanceTo(source.position);
+        if (dist < 15) {
+            const r = source.strength * (1 - source.falloff) ** Math.max(dist - 2, 0) ** 2 * FRAME_TIME;
+            player.radiation += r;
+            netChange += r;
+        }
+    }
+    if (inventory.currentPickaxe.radiation) {
+        const rad = inventory.currentPickaxe.radiation * FRAME_TIME / 2;
+        player.radiation += rad;
+        netChange += rad;
+    }
+    if (netChange > 0) {
+        if (!geigerAudio.isPlaying) {
+            geigerAudio.play();
+        }
+    } else if (geigerAudio.isPlaying) {
+        geigerAudio.stop();
+    }
+    if (player.radiation > 0) {
+        player.damage((player.radiation) * 0.08 * FRAME_TIME, 0, "radiation", true, false, false);
+    } else player.radiation = 0;
+
+    if (player.health > 100) player.health = 100;
+    if (player.health <= 0 || player.dead) {
+        // die!!!
+        if (!player.dead) displayAlert("You died!", "red");
+        player.dead = false;
+        player.health = 100;
+        player.radiation = 0;
+        perspectiveCamera.rotation.set(0, 0, 0);
+        teleport(0, locations[0][1], 0);
     }
     
     updateTopLeft();

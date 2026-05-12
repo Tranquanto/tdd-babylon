@@ -4394,7 +4394,7 @@ let ores = {
         singleLayer: true,
         excludeFromWiki: 2,
         light: {
-            col: "#f90",
+            col: "#fb4",
             str: 3,
             decay: 1,
             distance: 10,

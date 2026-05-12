@@ -679,6 +679,15 @@ function sortWikiList() {
     }
 }
 
+export function toggleInventory() {
+    if (document.exitPointerLock) document.exitPointerLock();
+    if (document.getElementById("large-inventory").style.display === "none") {
+        document.getElementById("large-inventory").style.display = "block";
+        inventory.largePrint();
+    }
+    else document.getElementById("large-inventory").style.display = "none";
+}
+
 function openOre(ore) { // open wiki page
     const oreData = ores[ore];
     let oreInfo = document.createElement("div");

@@ -61,3 +61,12 @@ function formatTime(t, onlyFirst = false) {
     else if (t < 1e300) return formatNum(t / 31556926.08, 2) + " yr";
     else return "Infinity";
 }
+
+/**
+ * Checks if a value is not defined or is NaN.
+ * @param {*} input Input value
+ * @return {boolean} Whether the value is not defined or NaN
+ */
+function nd(input) {
+    return !input && input !== 0;
+}

@@ -518,12 +518,12 @@ let ores = {
         singleLayer: true,
         desc: "A plant that grows on the surface.",
         multipleTextures: [
+            "grass_side", // +z
+            "grass_side", // -z
             "grass_side", // +x
             "grass_side", // -x
             "grass", // +y
-            "dirt", // -y
-            "grass_side", // +z
-            "grass_side" // -z
+            "dirt" // -y
         ],
         condition(x, y, z) {
             return y === topLayer(x, z) && checkAllBiomes(x, y, z);
@@ -540,12 +540,12 @@ let ores = {
         singleLayer: true,
         desc: "A plant that grows in autumnal biomes.",
         multipleTextures: [
+            "autumnalGrass_side", // +z
+            "autumnalGrass_side", // -z
             "autumnalGrass_side", // +x
             "autumnalGrass_side", // -x
             "autumnalGrass", // +y
-            "dirt", // -y
-            "autumnalGrass_side", // +z
-            "autumnalGrass_side" // -z
+            "dirt" // -y
         ],
         condition(x, y, z) {
             return y === topLayer(x, z) && checkAllBiomes(x, y, z, "autumnal");
@@ -2191,7 +2191,7 @@ let ores = {
         str: 76,
         desc: "A bright green gemstone.",
         light: {
-            color: "#00b152",
+            col: "#00b152",
             str: 1.2
         }
     },
@@ -4405,20 +4405,20 @@ let ores = {
         multipleTextures: [
             "torch",
             "torch",
-            "pixel",
-            "torch_bottom",
             "torch",
-            "torch"
+            "torch",
+            "pixel", // white
+            "torch_bottom"
         ],
         emissive: {
             str: 1.5,
             map: [
                 "torch_emissive",
                 "torch_emissive",
-                "pixel",
-                "transparent",
                 "torch_emissive",
-                "torch_emissive"
+                "torch_emissive",
+                "pixel",
+                "transparent"
             ]
         },
         scale: {x: 0.25, z: 0.25},
@@ -4443,10 +4443,10 @@ let ores = {
         multipleTextures: [
             "extinguishedTorch",
             "extinguishedTorch",
-            "extinguishedTorch_top",
-            "torch_bottom",
             "extinguishedTorch",
-            "extinguishedTorch"
+            "extinguishedTorch",
+            "extinguishedTorch_top",
+            "torch_bottom"
         ],
         scale: {x: 0.25, z: 0.25},
         cave: {
@@ -5953,7 +5953,7 @@ let structures = {
         minY: -7000
     },
     frostburnFacility: {
-        chance: 1 / 160,
+        chance: 1 / 16,
         maxY: -4000,
         minY: -5000,
         condition(x, y, z) {

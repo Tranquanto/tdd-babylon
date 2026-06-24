@@ -2,9 +2,9 @@ import Color from "https://colorjs.io/dist/color.js";
 
 import vars from "./vars.js";
 import { getOre, m, oreAt, checkAdjacent, calculatePower, airAt, calculateRarity, chunks, getBGOre } from "./outside_stuff.js";
-import { getLayer, items, layers, locations, ores, structureArray, structures, tiers, traits } from "./content/items.js";
+import { getLayer, items, layers, locations, oreArray, ores, structureArray, structures, tiers, traits } from "./content/items.js";
 import { biomes, topLayer } from "./content/layers.js";
-import { isCave, CHUNK3_RATE, CHUNK_SIZE_3, CHUNK_SIZE, noise } from "./noise.js";
+import { isCave, CHUNK3_RATE, CHUNK_SIZE_3, CHUNK_SIZE, noise, isCaveFloor, isCaveCeiling } from "./noise.js";
 import { inventory, toggleInventory, unlockAchievement } from "./inventory.js";
 import { rand01 } from "./perlin.js";
 
@@ -12,10 +12,10 @@ const { player, stats, camera } = vars;
 
 const canvas = document.getElementById("canvas");
 
-const textures = {};
+const textures = {}, animatedCanvases = [];
 const meshes = {};
 let meshCounts = {};
-let MAX_MESH_COUNT = 1000;
+let MAX_MESH_COUNT = 1024, MESH_CHUNK_SIZE = 128;
 let STARTED = true;
 let LAST_FRAME = performance.now(); // for FPS calculation
 let FRAME_TIME = 0;
@@ -27,6 +27,7 @@ let generatedStructures = {};
 let lightArr = [], radArr = [], repairArr = [], repairObj = {}, lightKeys = {};
 let USE_THIN_INSTANCES = true;
 let totalOres = 0;
+let GUI_HIDDEN = false;
 
 // set up scene and camera
 const engine = navigator.gpu ? new BABYLON.WebGPUEngine(canvas, {antialias: true}) : new BABYLON.Engine(canvas, true);
@@ -46,13 +47,39 @@ raycaster.length = 1000;
 // rendering pipeline
 const pipeline = new BABYLON.DefaultRenderingPipeline("pipeline", false, scene, [perspectiveCamera]);
 pipeline.bloomEnabled = true;
+pipeline.bloomWeight = 0.2;
 pipeline.fxaaEnabled = true;
 pipeline.fxaa.samples = 4;
 
 // ambient occlusion
 const ssao = new BABYLON.SSAO2RenderingPipeline("ssao", scene, 0.75, [perspectiveCamera]);
 ssao.radius = 1;
+ssao.samples = 16;
+ssao.maxZ = 8;
 window.ssao = ssao;
+
+// glow
+const glow = new BABYLON.GlowLayer("glow", scene);
+glow.intensity = 0.5;
+glow.customEmissiveColorSelector = (mesh, _subMesh, material, result) => {
+    if (mesh.name === "sun") {
+        result.set(0, 0, 0, 0); // separate glow
+    } else {
+        // use emissive color for glow
+        result.set(material.emissiveColor.r, material.emissiveColor.g, material.emissiveColor.b, 1);
+        result.a *= (mesh.visibility ?? 1) * (material.alpha ?? 1);
+    }
+}
+
+const sunGlow = new BABYLON.GlowLayer("sunGlow", scene);
+sunGlow.intensity = 1;
+sunGlow.customEmissiveColorSelector = (mesh, _subMesh, _material, result) => {
+    if (mesh.name !== "sun") {
+        result.set(0, 0, 0, 0);
+    } else {
+        result.set(1, 1, 0.8, 1);
+    }
+}
 
 let geigerAudio = new Audio("audio/geiger.mp3");
 
@@ -268,8 +295,11 @@ const cameraLight = new BABYLON.PointLight("cameraLight", perspectiveCamera.posi
 const sun = new BABYLON.CreateSphere("sun", {diameter: 10}, scene);
 const sunMaterial = new BABYLON.StandardMaterial("sunMaterial", scene);
 sunMaterial.emissiveColor = new BABYLON.Color3(1, 1, 0.8);
+sunMaterial.emissiveIntensity = 50;
 sunMaterial.specularColor = new BABYLON.Color3(0, 0, 0);
 sunMaterial.disableLighting = true;
+sun.applyFog = false;
+sun.ignoreCameraMaxZ = true;
 sun.material = sunMaterial;
 
 function getTime() {
@@ -285,13 +315,15 @@ function getTimeString() {
 }
 
 const skybox = BABYLON.MeshBuilder.CreateBox("skyBox", {size: 500}, scene); // not working, figure out later
-skybox.visibility = 0;
+skybox.visibility = 1;
 const skyboxMaterial = new BABYLON.StandardMaterial("skyBoxMaterial", scene);
 skyboxMaterial.backFaceCulling = false;
 skyboxMaterial.disableLighting = true;
+skyboxMaterial.disableDepthWrite = true;
 skybox.material = skyboxMaterial;
 skybox.applyFog = false;
 skybox.infiniteDistance = true;
+skybox.ignoreCameraMaxZ = true;
 
 const lightContainers = {};
 
@@ -403,10 +435,17 @@ function getColor(input) {
     }
 }
 
-function getTexture(ore) {
-    if (ores[ore].noTexture) return null;
+function getTexture(ore, face, type) {
+    if (ores[ore]?.noTexture) return null;
     const id = ore;
-    if (ores[id]?.customTexture) {
+    if (ores[id]?.multipleTextures && face !== undefined) {
+        if (type === "emissive" && ores[id]?.emissive.map)
+            ore = ores[id].emissive.map[face] ?? id;
+        else
+            ore = ores[id].multipleTextures[face] ?? id;
+    } else if (type === "emissive" && ores[id]?.emissive?.map) {
+        ore = ores[id].emissive.map ?? id;
+    } else if (ores[id]?.customTexture) {
         ore = ores[id].customTexture?.ore ?? id;
     }
     if (!textures[`${ore}`]) textures[`${ore}`] = new BABYLON.Texture(`img/block/${ore}.png`, scene, false, true, BABYLON.Texture.NEAREST_SAMPLINGMODE);
@@ -414,9 +453,15 @@ function getTexture(ore) {
     return textures[`${ore}`];
 }
 
-function generateOre(x, y, z, ore, bg, settings) {
+export function generateOre(x, y, z, ore, bg, settings) {
     if (!ores[ore]) return;
     x = Math.round(x), y = Math.round(y), z = Math.round(z);
+    
+    if (ores[ore] && ores[ore].placeholder) {
+        if (ores[ore].onGenerate) ores[ore].onGenerate(x, y, z, settings, m(x, y, z));
+        return;
+    }
+
     if (oreAt(x, y, z) && !settings.forcedReplace) {
         return m(x, y, z);
     } else if (airAt(x, y, z) && !settings.forced && !m(x, y, z)?.temp) {
@@ -435,6 +480,10 @@ function generateOre(x, y, z, ore, bg, settings) {
     if (nd(settings.offset.x)) settings.offset.x = 0;
     if (nd(settings.offset.y)) settings.offset.y = 0;
     if (nd(settings.offset.z)) settings.offset.z = 0;
+
+    settings.offset.x += ores[ore].offset?.x ?? 0;
+    settings.offset.y += ores[ore].offset?.y ?? 0;
+    settings.offset.z += ores[ore].offset?.z ?? 0;
 
     if (!settings.scale) settings.scale = {x: 1, y: 1, z: 1}; // test
     if (nd(settings.scale.x)) settings.scale.x = 1;
@@ -457,60 +506,102 @@ function generateOre(x, y, z, ore, bg, settings) {
     if (nd(settings.rotation.x)) settings.rotation.x = 0;
     if (nd(settings.rotation.y)) settings.rotation.y = 0;
     if (nd(settings.rotation.z)) settings.rotation.z = 0;
+
+    let meshID = `${ore}_${bg}`;
+    const chunk = getChunkKey(x, y, z, MESH_CHUNK_SIZE);
+    meshID += `_${chunk}`;
     
-    let count = meshCounts[`${ore}_${bg}`] || 0;
+    let count = meshCounts[meshID] || 0;
     
     let str = (typeof ores[ore].str === "function" ? ores[ore].str(x, y, z) : ores[ore].str);
-    let color = getColor(
-        (ores[ore].customModel || ores[ore].noTexture || settings.isGeode || ores[ore].oreColor)
+    const colorData = (ores[ore].customModel || ores[ore].noTexture || settings.isGeode || ores[ore].oreColor)
         ? ores[ore].firstColor
-        : ores[ore].forcedColor ?? "#ffffff"
-    );
+        : ores[ore].forcedColor ?? "#ffffff";
+    let color = getColor(settings.color ?? colorData);
     
     if (ores[bg]) str = Math.max(str, typeof ores[bg].str === "function" ? ores[bg].str(x, y, z) : ores[bg].str);
     if (str === undefined || str === 0) str = 1;
     
-    if (meshes[`${ore}_${bg}_${count}`]?.thinInstanceCount >= MAX_MESH_COUNT) {
-        meshCounts[`${ore}_${bg}`] = ++count;
+    if (meshes[`${meshID}_${count}`]?.thinInstanceCount >= MAX_MESH_COUNT) {
+        meshCounts[meshID] = ++count;
     }
     
-    if (!meshes[`${ore}_${bg}_${count}`]) {
-        const oreMesh = BABYLON.MeshBuilder.CreateBox(`${ore}_${bg}_${count}`, {size: 1, wrap: true}, scene);
+    if (!meshes[`${meshID}_${count}`]) {
+        const oreMesh = BABYLON.MeshBuilder.CreateBox(`${meshID}_${count}`, {size: 1, wrap: true}, scene);
         oreMesh.metadata = {ore, background: bg, coords: [], type: "ore"};
         if (USE_THIN_INSTANCES) oreMesh.thinInstanceEnablePicking = true; // allow picking by raycast
         const oreMaterial = new BABYLON.PBRMaterial(`oreMaterial-${x}_${y}_${z}`, scene);
-        oreMaterial.baseColor = oreMaterial.diffuseColor = color;
+        oreMaterial.useVertexColors = true;
+        oreMaterial.baseColor = oreMaterial.diffuseColor = new BABYLON.Color3(1, 1, 1);
         oreMaterial.ambientColor = new BABYLON.Color3(1, 1, 1);
         oreMaterial.specularColor = new BABYLON.Color3(0.5, 0.5, 0.5);
         oreMaterial.alphaMode = 2;
         
+        oreMaterial.roughness = 1;
+        oreMaterial.metallic = 0;
+
+        let materials = [];
+        if (ores[ore]?.multipleTextures) {
+            for (let i = 0; i < 6; i++) {
+                const mat = new BABYLON.PBRMaterial(`oreMaterial-${x}_${y}_${z}-${i}`, scene);
+                mat.useVertexColors = true;
+                mat.baseColor = mat.diffuseColor = new BABYLON.Color3(1, 1, 1);
+                mat.ambientColor = new BABYLON.Color3(1, 1, 1);
+                mat.specularColor = ore === bg || ores[ore]?.singleLayer ? new BABYLON.Color3(0.5, 0.5, 0.5) : new BABYLON.Color3(0, 0, 0);
+                mat.alphaMode = 2;
+                mat.baseTexture = mat.albedoTexture = mat.opacityTexture = getTexture(ore, i);
+        
+                mat.roughness = 1;
+                mat.metallic = 0;
+                materials.push(mat);
+            }
+        } else {
+            materials.push(oreMaterial);
+        }
+        
         const backgroundMaterial = new BABYLON.PBRMaterial(`backgroundMaterial-${x}_${y}_${z}`, scene);
+        backgroundMaterial.useVertexColors = true;
         backgroundMaterial.baseColor = backgroundMaterial.diffuseColor = new BABYLON.Color3(1, 1, 1);
         backgroundMaterial.ambientColor = new BABYLON.Color3(1, 1, 1);
         backgroundMaterial.specularColor = new BABYLON.Color3(0, 0, 0);
         
-        if (ore === bg || ores[ore]?.singleLayer) oreMaterial.specularColor = new BABYLON.Color3(0, 0, 0);
-        
+        if (ores[ore]?.emissive) {
+            for (const oreMaterial of materials) {
+                oreMaterial.emissiveColor = getColor(ores[ore].emissive.col ?? "#ffffff");
+                oreMaterial.emissiveIntensity = ores[ore].emissive.str ?? 1;
+            }
+        }
         if (ores[ore]?.light) {
             oreMesh.receiveShadows = false;
-            oreMaterial.emissiveColor = new BABYLON.Color3(1, 1, 1);
-            oreMaterial.emissiveIntensity = ores[ore].light.str;
+            if (!ores[ore].emissive) {
+                for (const oreMaterial of materials) {
+                    oreMaterial.emissiveColor = new BABYLON.Color3(1, 1, 1);
+                    oreMaterial.emissiveIntensity = ores[ore].light.str;
+                }
+            }
         }
         oreMaterial.albedoTexture = oreMaterial.baseTexture = getTexture(ore);
-        oreMaterial.diffuseTexture = getTexture(ore);
         oreMaterial.opacityTexture = getTexture(ore);
-        if (ores[ore]?.light || ores[ore]?.emissive) oreMaterial.emissiveTexture = getTexture(ore);
-        backgroundMaterial.albedoTexture = backgroundMaterial.baseTexture = getTexture(bg);
+        if (ores[ore]?.light || ores[ore]?.emissive) {
+            if (!ores[ore]?.multipleTextures)
+                oreMaterial.emissiveTexture = getTexture(ore, null, "emissive");
+            else {
+                for (let i = 0; i < materials.length; i++) {
+                    materials[i].emissiveTexture = getTexture(ore, i, "emissive");
+                }
+            }
+        }
+        backgroundMaterial.albedoTexture = backgroundMaterial.baseTexture = ores[ore]?.singleLayer ? getTexture(ore) : getTexture(bg);
         backgroundMaterial.diffuseTexture = getTexture(bg);
         
         if (ores[ore]?.textureHasTransparency) {
             backgroundMaterial.alpha = 0;
             
-            oreMaterial.transparencyMode = BABYLON.PBRMaterial.PBRMATERIAL_ALPHATEST;
+            for (const oreMaterial of materials) {
+                oreMaterial.transparencyMode = BABYLON.PBRMaterial.PBRMATERIAL_ALPHATEST;
+            }
         }
-        
-        oreMaterial.roughness = 1;
-        oreMaterial.metallic = 0;
+
         backgroundMaterial.roughness = 1;
         backgroundMaterial.metallic = 0;
         
@@ -518,26 +609,41 @@ function generateOre(x, y, z, ore, bg, settings) {
         backgroundMaterial.usePhysicalLightFalloff = false;
         
         const multiMaterial = new BABYLON.MultiMaterial(`multi-${x}_${y}_${z}`, scene);
-        multiMaterial.subMaterials.push(backgroundMaterial, oreMaterial);
+        multiMaterial.subMaterials.push(backgroundMaterial, ...materials);
         oreMesh.material = multiMaterial;
         
         oreMesh.releaseSubMeshes();
         const vertices = oreMesh.getTotalVertices();
         const indices = oreMesh.getTotalIndices();
         new BABYLON.SubMesh(0, 0, vertices, 0, indices, oreMesh);
-        new BABYLON.SubMesh(1, 0, vertices, 0, indices, oreMesh);
+        if (materials.length === 1) new BABYLON.SubMesh(1, 0, vertices, 0, indices, oreMesh);
+        else {
+            const faceVertexCount = vertices / 6;
+            for (let i = 0; i < 6; i++) {
+                new BABYLON.SubMesh(i + 1, i * faceVertexCount, faceVertexCount, i * 6, 6, oreMesh);
+            }
+        }
         
-        meshes[`${ore}_${bg}_${count}`] = oreMesh;
+        meshes[`${meshID}_${count}`] = oreMesh;
     }
     
     // create an instance of the mesh for better performance
     if (USE_THIN_INSTANCES) {
         const matrix = BABYLON.Matrix.Scaling(settings.scale.x, settings.scale.y, settings.scale.z).multiply(BABYLON.Matrix.RotationYawPitchRoll(settings.rotation.y, settings.rotation.x, settings.rotation.z)).multiply(BABYLON.Matrix.Translation(x + settings.offset.x, y + settings.offset.y, z + settings.offset.z));
-        meshes[`${ore}_${bg}_${count}`].thinInstanceAdd(matrix);
-        const index = meshes[`${ore}_${bg}_${count}`].thinInstanceCount - 1;
-        meshes[`${ore}_${bg}_${count}`].metadata.coords[index] = {x, y, z};
+        meshes[`${meshID}_${count}`].thinInstanceAdd(matrix);
+        const index = meshes[`${meshID}_${count}`].thinInstanceCount - 1;
+        meshes[`${meshID}_${count}`].metadata.coords[index] = {x, y, z};
+
+        /** @type {BABYLON.Mesh} */
+        const mesh = meshes[`${meshID}_${count}`];
+        mesh.metadata.thinInstanceColors ??= [];
+        mesh.metadata.thinInstanceColors[index * 4 + 0] = color.r;
+        mesh.metadata.thinInstanceColors[index * 4 + 1] = color.g;
+        mesh.metadata.thinInstanceColors[index * 4 + 2] = color.b;
+        mesh.metadata.thinInstanceColors[index * 4 + 3] = 1;
+        mesh.thinInstanceSetBuffer("color", new Float32Array(mesh.metadata.thinInstanceColors), 4);
     } else {
-        const instance = meshes[`${ore}_${bg}_${count}`].createInstance(`${ore}_${bg}_${count}`);
+        const instance = meshes[`${meshID}_${count}`].createInstance(`${meshID}_${count}`);
         instance.position = new BABYLON.Vector3(x, y, z);
         instance.metadata = {ore, background: bg, coords: {x, y, z}};
     }
@@ -560,8 +666,8 @@ function generateOre(x, y, z, ore, bg, settings) {
         rotation: settings.rotation,
         chance: settings.chance,
         str,
-        meshID: `${ore}_${bg}_${count}`,
-        index: USE_THIN_INSTANCES ? meshes[`${ore}_${bg}_${count}`].thinInstanceCount - 1 : undefined
+        meshID: `${meshID}_${count}`,
+        index: USE_THIN_INSTANCES ? meshes[`${meshID}_${count}`].thinInstanceCount - 1 : undefined
     });
     totalOres++;
     
@@ -600,6 +706,8 @@ function generateOre(x, y, z, ore, bg, settings) {
         
         container.addLight(pointLight);
     }
+
+    if (ores[ore]?.onGenerate) ores[ore].onGenerate(x, y, z, settings, m(x, y, z));
     
     return m(x, y, z);
 }
@@ -767,7 +875,7 @@ window.removeOre = removeOre;
 
 function spawnOre(x, y, z, settings) {
     if (settings === undefined) settings = {caveExclusive: false, noCave: false};
-    if (m(x, y, z) && !settings.forced && !settings.forceReplace /*&&  !m(x, y, z).temp */) return false;
+    if (m(x, y, z) && !settings.forced && !settings.forceReplace && !m(x, y, z).temp) return false;
     if (typeof settings === "string") settings = {caveExclusive: true, noCave: true, caveType: settings};
     const layer = getLayer(y, x, z, false);
     if (layers[layer]?.universalCondition && !layers[layer].universalCondition(x, y, z) && !m(x, y, z)) {
@@ -777,6 +885,8 @@ function spawnOre(x, y, z, settings) {
     
     settings = {...settings};
     settings.all = true;
+    settings.cave = {};
+    settings.scale = {};
 
     for (let i = 0; i < structureArray.length; i++) {
         const structure = structureArray[i];
@@ -837,7 +947,41 @@ function spawnOre(x, y, z, settings) {
         return m(x, y, z);
     }
     
-    const oreData = getOre(x, y, z, settings);
+    if (isCaveFloor(x, y, z)) settings.isCaveFloor = true;
+    if (isCaveCeiling(x, y, z)) settings.isCaveCeiling = true;
+    if (!Object.keys(settings.cave).length) delete settings.cave;
+    
+    let oreData;
+
+    if (m(x, y, z)?.temp) {
+        const data = m(x, y, z);
+        oreData = {};
+
+        if (data.dripstone) {
+            settings.noVein = true;
+            settings.noGeode = true;
+            oreData.ore = oreData.bg = getBGOre(x, Math.round(y - 5 + data.dripstone * 5), z);
+            settings.scale.x = settings.scale.z = data.dripstone;
+        } else {
+            settings.cave = {};
+            settings.caveAir = true;
+            if (data.caveFloor) {
+                settings.cave = { floor: true };
+            }
+            if (data.caveCeiling) {
+                settings.cave.ceiling = true;
+            }
+            if (data.caveWall) {
+                settings.cave.walls = data.caveWall;
+            }
+            settings.cave.air = true;
+            if (!Object.keys(settings.cave).length) return m(x, y, z, { ore: "air", caveType: data.caveType });
+        }
+    }
+
+    if (!oreData?.ore) {
+        oreData = getOre(x, y, z, settings);
+    }
     if (!oreData || oreData.ore === null) {
         m(x, y, z, true);
         return m(x, y, z);
@@ -1462,6 +1606,18 @@ function useSelectedItem() {
     return false;
 }
 
+for (let i = 0; i < oreArray.length; i++) {
+    const ore = oreArray[i];
+    if (ore.getCanvas) {
+        ore.canvasElem = document.createElement("canvas");
+        ore.canvasElem.width = 32;
+        ore.canvasElem.height = 32;
+        if (ore.updateCanvas) animatedCanvases.push(ore.id);
+        textures[ore.id] = new BABYLON.DynamicTexture(`${ore.name}CanvasTexture`, ore.getCanvas(), scene, true, BABYLON.Texture.NEAREST_SAMPLINGMODE, undefined, true);
+        textures[ore.id]?.update();
+    }
+}
+
 function start() {
     locations[0][1] = topLayer(locations[0][0], locations[0][2]) + 1;
     player.position.y = locations[0][1] + 1;
@@ -1512,8 +1668,38 @@ engine.runRenderLoop(() => {
     vars.FRAME_TIME = FRAME_TIME;
     
     document.getElementById("fps").textContent = `FPS: ${(1 / FRAME_TIME).toFixed(1)}`;
+
+    for (let i = 0; i < animatedCanvases.length; i++) {
+        ores[animatedCanvases[i]].getCanvas();
+        textures[animatedCanvases[i]]?.update();
+    }
     
     loadNearbyChunks();
+    
+    for (let i = 0; i < vars.removalQueue.length; i++) {
+        const r = vars.removalQueue[i];
+        if (oreAt(r.x, r.y, r.z)) {
+            updateBreakMesh(r.x, r.y, r.z, undefined, 2);
+            removeOre(r.x, r.y, r.z, { noUpdate: true });
+        } else {
+            m(r.x, r.y, r.z, true);
+        }
+    }
+    for (let i = 0; i < vars.removalQueue.length; i++) {
+        const r = vars.removalQueue[i];
+        generateAdjacent(r.x, r.y, r.z, { noUpdate: true });
+    }
+    vars.removalQueue.length = 0;
+
+    for (let i = 0; i < vars.spawnQueue.length; i++) {
+        spawnOre(...vars.spawnQueue[i]); // why is this like my first time ever using spread syntax
+    }
+    vars.spawnQueue.length = 0;
+
+    for (let i = 0; i < vars.structureQueue.length; i++) {
+        generateStructure(...vars.structureQueue[i]);
+    }
+    vars.structureQueue.length = 0;
     
     // movement
     direction.z = Number(keys.forward) - Number(keys.backward);
@@ -1888,7 +2074,9 @@ engine.runRenderLoop(() => {
             if (layerDetails?.onEnter) layerDetails.onEnter();
             if (layerDetails?.skybox) {
                 skyboxMaterial.alpha = layerDetails?.skybox.opacity ? layerDetails.skybox.opacity : 1;
-                skyboxMaterial.reflectionTexture = textures[`skybox/${layerDetails.skybox.id || layer}`];
+                skyboxMaterial.reflectionTexture = skyboxMaterial.emissiveTexture = textures[`skybox/${layerDetails.skybox.id || layer}`];
+                skyboxMaterial.reflectionTexture.coordinatesMode = BABYLON.Texture.SKYBOX_MODE;
+                skyboxMaterial.albedoTexture = textures[`skybox/${layerDetails.skybox.id || layer}`];
             } else {
                 skyboxMaterial.alpha = 0;
             }
@@ -1914,7 +2102,9 @@ engine.runRenderLoop(() => {
             
             function updateLighting(area) {
                 scene.fogStart = 0;
-                scene.fogEnd = area.fog || 1000;
+                // scene.fogEnd = area.fog || 1000;
+                scene.fogDensity = 0.5 / (Math.sqrt(area.fog || 100));
+                perspectiveCamera.maxZ = area.fog || 1000;
                 vars.fogColor = area.fogColor || "#000000";
                 vars.nightFogColor = area.nightFogColor || vars.fogColor;
                 
@@ -1969,7 +2159,7 @@ engine.runRenderLoop(() => {
     const nightFog = vars.nightFogColor !== undefined ? vars.nightFogColor : "#050022";
     
     if (sun.visible) {
-        skyboxMaterial.reflectionTexture = textures["skybox/space"];
+        skyboxMaterial.reflectionTexture = skyboxMaterial.emissiveTexture = textures["skybox/space"];
         if (sunHeight < -0.2) {
             scene.fogColor = getColor(nightFog);
             hemisphereLight.intensity = 0;
@@ -1985,11 +2175,11 @@ engine.runRenderLoop(() => {
         }
         
         if (!vars.sunAlwaysVisible) {
-            sun.material.alpha = Math.max(0, (sunHeight + 0.3) / 0.7);
-            directionalLight.intensity = vars.directionalLightIntensity * Math.min(1, sun.material.alpha);
+            sun.visibility = Math.max(0, (sunHeight + 0.3) / 0.7);
+            directionalLight.intensity = vars.directionalLightIntensity * Math.min(1, sun.visibility);
         } else {
             directionalLight.intensity = vars.directionalLightIntensity;
-            sun.material.alpha = 1;
+            sun.visibility = 1;
         }
     } else {
         scene.fogColor = BABYLON.Color3.Lerp(getColor(vars.fogColor), getColor(nightFog), Math.min(Math.max((0.2 - sunHeight) / 0.4, 0), 1));
@@ -2007,7 +2197,7 @@ engine.runRenderLoop(() => {
     }
     
     // raycasting
-    const raycaster = perspectiveCamera.getForwardRay();
+    const raycaster = perspectiveCamera.getForwardRay(inventory.currentPickaxe.range);
     const hit = scene.pickWithRay(raycaster, pickPredicate);
     if (hit.hit) {
         const picked = getPickedOreCoords(hit);
@@ -2037,6 +2227,9 @@ engine.runRenderLoop(() => {
                 if (MINING) miningTick();
                 
                 document.getElementById("debugInfo").textContent = `${x}, ${y}, ${z}`;
+                if (document.getElementById("totalOres").style.display !== "none") {
+                    document.getElementById("debugInfo").innerText += `\n${m(x, y, z).meshID}`;
+                }
                 document.getElementById("oreRarity").textContent = m(x, y, z).placed ? `Placed by ${window.username || "you"}` : (isFinite(chance) && Math.abs(chance) !== 0 ? formatChance(chance) : "");
                 document.getElementById("oreRarity").style.color = tiers[ores[m(x, y, z).ore]?.tier]?.color ?? "#fff";
                 document.getElementById("oreRarity").style.display = "block";

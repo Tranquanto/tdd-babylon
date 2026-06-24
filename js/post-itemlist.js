@@ -1,10 +1,11 @@
+import Color from "https://colorjs.io/dist/color.js";
+
 import vars, { airAt } from "./outside_stuff.js";
 import { items, layers, ores, structures, biomes, locations, topLayer } from "./content/items.js";
 import { isCave } from "./noise.js";
-import { teleport } from "./main.js";
+import { teleport, generateOre } from "./main.js";
 
-const generateOre = () => undefined;
-const spawnAlert = generateOre;
+const spawnAlert = () => undefined;
 
 function tpMenu(locations = locations) {
     return function() {
@@ -35,8 +36,8 @@ function tpMenu(locations = locations) {
             const color = layers[loc[3]].color || layers[loc[3]].fogColor || "#000";
             button.style.backgroundColor = color;
 
-            const threeCol = new BABYLON.Color3.FromHexString(color);
-            const { r, g, b } = threeCol;
+            const threeCol = new Color(color);
+            const [r, g, b] = threeCol.coords;
             const brightness = (r * 299 + g * 587 + b * 114) / 1000;
             button.style.color = brightness < 0.5 ? "#fff" : "#000";
 

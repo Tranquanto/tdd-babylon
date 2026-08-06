@@ -1,5 +1,5 @@
 import vars from "./outside_stuff.js";
-document.getElementById("settings-maxLights").innerText = `Max Lights: ${localStorage.getItem("maxLights") || 10} (Requires Refresh)`;
+import { resize } from "./main.js";
 
 document.getElementById("play-btn").addEventListener("click", () => {
     document.getElementById("main-menu").style.display = "none";
@@ -24,37 +24,28 @@ document.getElementById("settings-btn").addEventListener("click", () => {
 });
 document.getElementById("settings-sensitivity").addEventListener("input", e => {
     vars.settings.sensitivity = Number(e.target.value);
-    // updateSetting("sensitivity");
+    updateSetting("sensitivity");
 });
 document.getElementById("settings-music").addEventListener("input", e => {
     vars.settings.music = Number(e.target.value);
-    // updateSetting("music");
+    updateSetting("music");
 });
 document.getElementById("settings-oreSound").addEventListener("input", e => {
     vars.settings.oreSound = Number(e.target.value);
     // listener.setMasterVolume(vars.settings.oreSound);
-    // updateSetting("oreSound");
+    updateSetting("oreSound");
 });
 document.getElementById("settings-username").addEventListener("click", () => {
     localStorage.removeItem("username");
     document.getElementById("settings-username").disabled = true;
     document.getElementById("settings-username").innerText = "Username reset. Please refresh the page.";
 });
-document.getElementById("settings-maxLights").addEventListener("change", () => {
-    const maxLights = Number(document.getElementById("settings-maxLights").value);
-    localStorage.setItem("maxLights", maxLights);
-});
-document.getElementById("settings-maxLights").addEventListener("input", e => {
-    vars.settings.maxLights = Number(e.target.value);
-    localStorage.setItem("maxLights", vars.settings.maxLights);
-    // updateSetting("maxLights", false);
-});
 document.getElementById("settings-resolutionScale").addEventListener("input", e => {
     vars.settings.resolutionScale = Number(e.target.value);
     localStorage.setItem("resolutionScale", vars.settings.resolutionScale);
-    // updateSetting("resolutionScale", false);
+    updateSetting("resolutionScale", false);
 });
-document.getElementById("settings-shadows").addEventListener("click", () => {
+/* document.getElementById("settings-shadows").addEventListener("click", () => {
     if (vars.settings.shadows === undefined) vars.settings.shadows = true;
     vars.settings.shadows = !vars.settings.shadows;
     localStorage.setItem("shadows", vars.settings.shadows);
@@ -65,8 +56,8 @@ document.getElementById("settings-shadows").addEventListener("click", () => {
 document.getElementById("settings-shadowMapSize").addEventListener("input", e => {
     vars.settings.shadowMapSize = 2 ** Number(e.target.value);
     localStorage.setItem("shadowMapSize", vars.settings.shadowMapSize);
-    // updateSetting("shadowMapSize", false);
-});
+    updateSetting("shadowMapSize", false);
+}); */
 document.getElementById("resetBtn").addEventListener("click", () => {
     if (
         confirm('Are you sure you want to reset?')
@@ -168,15 +159,14 @@ if (location.origin.includes("localhost")) {
     });
 }
 
-// updateSetting("sensitivity", undefined, true);
-// updateSetting("music", undefined, true);
-// updateSetting("oreSound", undefined, true);
-// updateSetting("maxLights", false, true);
-// updateSetting("resolutionScale", false, true);
+updateSetting("sensitivity", undefined, true);
+updateSetting("music", undefined, true);
+updateSetting("oreSound", undefined, true);
+updateSetting("resolutionScale", false, true);
 // updateSetting("shadowMapSize", false, true);
 
 if (localStorage.getItem("shadows") === null) {
-    vars.settings.shadows = true;
+    vars.settings.shadows = false;
 } else {
     vars.settings.shadows = localStorage.getItem("shadows") === "true";
 }
@@ -221,3 +211,42 @@ vars.canvasFilter = {
         vars.canvasFilter.update();
     }
 };
+
+export function updateSetting(setting, percent = true, updateSlider) {
+    const names = {
+        sensitivity: "Sensitivity",
+        music: "Background Music Volume",
+        oreSound: "Ore Sound/Music Volume",
+        resolutionScale: "Resolution Scale",
+        shadowMapSize: "Shadow Map Size"
+    };
+
+    localStorage.setItem(setting, vars.settings[setting]);
+    if (setting === "sensitivity") controls.pointerSpeed = Number(vars.settings[setting]);
+    if (setting === "music") document.getElementById("bgm").volume = Number(vars.settings[setting]);
+    document.getElementById(`settings-${setting}-label`).innerText = `${names[setting]}: ${percent ? Math.round(Number(vars.settings[setting]) * 100) + "%" : Number(vars.settings[setting])}`;
+    if (setting === "resolutionScale") {
+        if (vars.settings[setting] > 1) {
+            document.getElementById(`settings-${setting}-label`).innerText += " (!)";
+        }
+        resize();
+    }
+
+    /*
+    if (setting === "shadowMapSize") {
+        document.getElementById(`settings-${setting}`).max = Math.log2(renderer.capabilities.maxTextureSize);
+    }
+
+    if (updateSlider) {
+        if (setting === "shadowMapSize") {
+            document.getElementById(`settings-${setting}`).value = Math.log2(vars.settings[setting]);
+        } else {
+            document.getElementById(`settings-${setting}`).value = vars.settings[setting];
+        }
+    } else {
+        if (setting === "maxLights" && vars.settings[setting] !== lights.length || vars.settings.shadowMapSize !== Number(directionalLight.shadow.mapSize.width)) {
+            document.getElementById(`settings-${setting}-label`).innerText += " (Requires Refresh)";
+        }
+    }
+    */
+}

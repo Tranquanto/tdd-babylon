@@ -1,4 +1,4 @@
-import Color from "https://colorjs.io/dist/color.js";
+import Color from "./color.js";
 
 import vars from "./vars.js";
 import { getOre, m, oreAt, checkAdjacent, calculatePower, airAt, calculateRarity, chunks, getBGOre } from "./outside_stuff.js";
@@ -13,7 +13,7 @@ const { player, stats, camera } = vars;
 const canvas = document.getElementById("canvas");
 
 const textures = {}, animatedCanvases = [];
-const meshes = {};
+const meshes = {}, meshesNeedingUpdate = new Set();
 let meshCounts = {};
 let MAX_MESH_COUNT = 1024, MESH_CHUNK_SIZE = 128;
 let STARTED = true;
@@ -30,8 +30,8 @@ let totalOres = 0;
 let GUI_HIDDEN = false;
 
 // set up scene and camera
-const engine = navigator.gpu ? new BABYLON.WebGPUEngine(canvas, {antialias: true}) : new BABYLON.Engine(canvas, true);
-await engine.initAsync();
+const engine = navigator.gpu ? new BABYLON.Engine(canvas, {antialias: true}) : new BABYLON.Engine(canvas, true);
+if (engine.initAsync !== undefined) await engine.initAsync();
 const scene = new BABYLON.Scene(engine);
 const perspectiveCamera = new BABYLON.UniversalCamera("camera1", new BABYLON.Vector3(0, 2, 0), scene);
 perspectiveCamera.maxZ = 1000;
@@ -40,6 +40,7 @@ perspectiveCamera.fov = 1.2;
 scene.fogEnabled = true;
 scene.fogDensity = 0.01;
 scene.fogMode = BABYLON.Scene.FOGMODE_EXP2;
+scene.useRightHandedSystem = true;
 
 const raycaster = new BABYLON.Ray(new BABYLON.Vector3(), new BABYLON.Vector3());
 raycaster.length = 1000;
@@ -77,17 +78,18 @@ sunGlow.customEmissiveColorSelector = (mesh, _subMesh, _material, result) => {
     if (mesh.name !== "sun") {
         result.set(0, 0, 0, 0);
     } else {
-        result.set(1, 1, 0.8, 1);
+        result.set(1, 2 * Math.sin(getTime()) + 0.25, 0.8 * Math.sin(getTime()), 1);
     }
 }
 
 let geigerAudio = new Audio("audio/geiger.mp3");
 
-function resize() {
+export function resize() {
     canvas.width = window.innerWidth;
     canvas.height = window.innerHeight;
-
+    
     engine.resize(true);
+    engine.setSize(window.innerWidth * vars.settings.resolutionScale, window.innerHeight * vars.settings.resolutionScale);
 }
 
 window.addEventListener("resize", resize);
@@ -106,14 +108,23 @@ canvas.addEventListener("click", () => {
 });
 canvas.addEventListener("mousemove", e => {
     if (document.pointerLockElement === canvas) {
-        perspectiveCamera.rotation.y += e.movementX * 0.0015;
-        perspectiveCamera.rotation.x += e.movementY * 0.0015;
+        perspectiveCamera.rotation.y += e.movementX * -0.0015 * vars.settings.sensitivity;
+        perspectiveCamera.rotation.x += e.movementY * 0.0015 * vars.settings.sensitivity;
     }
     perspectiveCamera.rotation.x = Math.max(-Math.PI / 2, Math.min(Math.PI / 2, perspectiveCamera.rotation.x));
     if (perspectiveCamera.rotation.x > Math.PI / 2 - 0.00001) {
         perspectiveCamera.rotation.x = Math.PI / 2 - 0.00001;
     } else if (perspectiveCamera.rotation.x < -Math.PI / 2 + 0.00001) {
         perspectiveCamera.rotation.x = -Math.PI / 2 + 0.00001;
+    }
+});
+canvas.addEventListener("wheel", e => {
+    if (document.pointerLockElement === canvas) {
+        if (e.deltaY > 0) {
+            inventory.selectHotbarSlot((inventory.SELECTED_HOTBAR + 1) % 10);
+        } else if (e.deltaY < 0) {
+            inventory.selectHotbarSlot((inventory.SELECTED_HOTBAR + 9) % 10);
+        }
     }
 });
 document.addEventListener("keydown", event => {
@@ -333,7 +344,7 @@ function createLightContainer(key) {
     
     const container = new BABYLON.ClusteredLightContainer(`lightContainer${key}`, [], scene);
     container.falloffType = BABYLON.Light.FALLOFF_PHYSICAL;
-
+    
     lightContainers[key] = container;
     return container;
 }
@@ -345,7 +356,7 @@ window.hemisphereLight = hemisphereLight;
 cameraLight.falloffType = BABYLON.Light.FALLOFF_PHYSICAL;
 
 const halfBoundingBox = {x: 0.25, y: 0.9, z: 0.25};
-const checkCollision = (pos, returnOre, includeNotCollidable) => {
+const checkCollision = (pos, returnOre, includeNoCollision) => {
     const minX = Math.floor(pos.x - halfBoundingBox.x + 0.5);
     const maxX = Math.floor(pos.x + halfBoundingBox.x + 0.5);
     const minY = Math.floor(pos.y - halfBoundingBox.y + 0.9);
@@ -361,10 +372,10 @@ const checkCollision = (pos, returnOre, includeNotCollidable) => {
                 if (
                     y < 0 && !m(x, y, z) && !isCave(x, y, z) && checkAdjacent(x, y, z, isCave) ||
                     oreAt(x, y, z) && ores[m(x, y, z).ore] &&
-                    (includeNotCollidable || !(
-                        m(x, y, z).notCollidable ||
+                    (includeNoCollision || !(
+                        m(x, y, z).noCollision ||
                         ores[m(x, y, z).ore] &&
-                        ores[m(x, y, z).ore].notCollidable
+                        ores[m(x, y, z).ore].noCollision
                     ))
                 ) {
                     // Support variable block sizes
@@ -395,10 +406,10 @@ const checkCollision = (pos, returnOre, includeNotCollidable) => {
                             let out;
                             if (y === maxY) out = 2;
                             else out = true;
-                            if (returnOre) return {ore: m(x, y, z), x, y, z, block, out, notCollidable: includeNotCollidable || (m(x, y, z).notCollidable || ores[m(x, y, z).ore] && ores[m(x, y, z).ore].notCollidable)};
+                            if (returnOre) return {ore: m(x, y, z), x, y, z, block, out, noCollision: includeNoCollision || (m(x, y, z).noCollision || ores[m(x, y, z).ore] && ores[m(x, y, z).ore].noCollision)};
                             return out;
                         } else {
-                            all.push({x, y, z, block, out: y === maxY ? 2 : true, notCollidable: includeNotCollidable || (m(x, y, z).notCollidable || ores[m(x, y, z).ore] && ores[m(x, y, z).ore].notCollidable)});
+                            all.push({x, y, z, block, out: y === maxY ? 2 : true, noCollision: includeNoCollision || (m(x, y, z).noCollision || ores[m(x, y, z).ore] && ores[m(x, y, z).ore].noCollision)});
                         }
                     }
                 }
@@ -428,9 +439,9 @@ window.teleport = teleport;
 function getColor(input) {
     try {
         const color = new Color(input).toString({format: "hex", collapse: false});
-        return new BABYLON.Color3.FromHexString(color);
+        return BABYLON.Color3.FromHexString(color);
     } catch (e) {
-        console.error(`Invalid color: ${input}`);
+        console.error(`Invalid color: ${input} | ${e}`);
         return new BABYLON.Color3(1, 1, 1);
     }
 }
@@ -448,12 +459,17 @@ function getTexture(ore, face, type) {
     } else if (ores[id]?.customTexture) {
         ore = ores[id].customTexture?.ore ?? id;
     }
-    if (!textures[`${ore}`]) textures[`${ore}`] = new BABYLON.Texture(`img/block/${ore}.png`, scene, false, true, BABYLON.Texture.NEAREST_SAMPLINGMODE);
+    
+    if (!textures[`${ore}`]) {
+        const texture = new BABYLON.Texture(`img/block/${ore}.png`, scene, false, false, BABYLON.Texture.NEAREST_SAMPLINGMODE);
+        texture.wAng = Math.PI;
+        textures[`${ore}`] = texture;
+    }
     
     return textures[`${ore}`];
 }
 
-export function generateOre(x, y, z, ore, bg, settings) {
+export async function generateOre(x, y, z, ore, bg, settings) {
     if (!ores[ore]) return;
     x = Math.round(x), y = Math.round(y), z = Math.round(z);
     
@@ -461,7 +477,7 @@ export function generateOre(x, y, z, ore, bg, settings) {
         if (ores[ore].onGenerate) ores[ore].onGenerate(x, y, z, settings, m(x, y, z));
         return;
     }
-
+    
     if (oreAt(x, y, z) && !settings.forcedReplace) {
         return m(x, y, z);
     } else if (airAt(x, y, z) && !settings.forced && !m(x, y, z)?.temp) {
@@ -480,160 +496,225 @@ export function generateOre(x, y, z, ore, bg, settings) {
     if (nd(settings.offset.x)) settings.offset.x = 0;
     if (nd(settings.offset.y)) settings.offset.y = 0;
     if (nd(settings.offset.z)) settings.offset.z = 0;
-
+    
     settings.offset.x += ores[ore].offset?.x ?? 0;
     settings.offset.y += ores[ore].offset?.y ?? 0;
     settings.offset.z += ores[ore].offset?.z ?? 0;
-
+    
     if (!settings.scale) settings.scale = {x: 1, y: 1, z: 1}; // test
     if (nd(settings.scale.x)) settings.scale.x = 1;
     if (nd(settings.scale.y)) settings.scale.y = 1;
     if (nd(settings.scale.z)) settings.scale.z = 1;
-
+    
     if (ores[ore].scale) {
         settings.scale.x *= ores[ore].scale.x ?? 1;
         settings.scale.y *= ores[ore].scale.y ?? 1;
         settings.scale.z *= ores[ore].scale.z ?? 1;
     }
-
+    
     if (!settings.rotation) {
-        settings.rotation = { x: 0, y: Math.floor(Math.random() * 4) * Math.PI / 2, z: 0 };
-        if (ores[ore]) {
-            if (ores[ore].rotation) settings.rotation = JSON.parse(JSON.stringify(ores[ore].rotation));
-            else if (ores[ore].noRandomRotation) settings.rotation.y = 0;
+        if (ores[ore].cave?.rotate) {
+            let sides = [
+                [`${x + 1},${y},${z}`, {x: 0, y: 0, z: Math.PI / 2}],
+                [`${x - 1},${y},${z}`, {x: 0, y: 0, z: -Math.PI / 2}],
+                [`${x},${y + 1},${z}`, {x: Math.PI, y: 0, z: 0}],
+                [`${x},${y - 1},${z}`, {x: 0, y: 0, z: 0}],
+                [`${x},${y},${z + 1}`, {x: -Math.PI / 2, y: 0, z: 0}],
+                [`${x},${y},${z - 1}`, {x: Math.PI / 2, y: 0, z: 0}]
+            ];
+            
+            sides = sides.filter(s => {
+                const [x1, y1, z1] = s[0].split(",").map(Number);
+                return !isCave(x1, y1, z1);
+            });
+            settings.rotation = sides.length > 0 ? sides[Math.floor(Math.random() * sides.length)][1] : {x: 0, y: 0, z: 0};
+        } else {
+            settings.rotation = { x: 0, y: Math.floor(Math.random() * 4) * Math.PI / 2, z: 0 };
+            if (ores[ore]) {
+                if (ores[ore].rotation) settings.rotation = JSON.parse(JSON.stringify(ores[ore].rotation));
+                else if (ores[ore].noRandomRotation) settings.rotation.y = 0;
+            }
         }
     }
     if (nd(settings.rotation.x)) settings.rotation.x = 0;
     if (nd(settings.rotation.y)) settings.rotation.y = 0;
     if (nd(settings.rotation.z)) settings.rotation.z = 0;
-
+    
     let meshID = `${ore}_${bg}`;
     const chunk = getChunkKey(x, y, z, MESH_CHUNK_SIZE);
+    const chunkSplit = getChunkKey(x, y, z, MESH_CHUNK_SIZE, true).map(a => a * MESH_CHUNK_SIZE);
     meshID += `_${chunk}`;
     
     let count = meshCounts[meshID] || 0;
     
     let str = (typeof ores[ore].str === "function" ? ores[ore].str(x, y, z) : ores[ore].str);
     const colorData = (ores[ore].customModel || ores[ore].noTexture || settings.isGeode || ores[ore].oreColor)
-        ? ores[ore].firstColor
-        : ores[ore].forcedColor ?? "#ffffff";
-    let color = getColor(settings.color ?? colorData);
+    ? ores[ore].firstColor
+    : ores[ore].forcedColor ?? "#ffffff";
+    let color = getColor(settings.color ?? ores[ore].colorize !== undefined ? ores[ore].colorize() : colorData);
     
-    if (ores[bg]) str = Math.max(str, typeof ores[bg].str === "function" ? ores[bg].str(x, y, z) : ores[bg].str);
+    if (ores[bg] !== undefined && !ores[ore].singleLayer) str = Math.max(str, typeof ores[bg].str === "function" ? ores[bg].str(x, y, z) : ores[bg].str);
     if (str === undefined || str === 0) str = 1;
     
     if (meshes[`${meshID}_${count}`]?.thinInstanceCount >= MAX_MESH_COUNT) {
         meshCounts[meshID] = ++count;
     }
     
-    if (!meshes[`${meshID}_${count}`]) {
-        const oreMesh = BABYLON.MeshBuilder.CreateBox(`${meshID}_${count}`, {size: 1, wrap: true}, scene);
+    if (meshes[`${meshID}_${count}`] === undefined) {
+        let oreMesh;
+        if (ores[ore].customModel) {
+            const result = await BABYLON.ImportMeshAsync(`models/${ore}.glb`, scene);
+            oreMesh = result.meshes[1];
+        } else {
+            oreMesh = BABYLON.MeshBuilder.CreateBox(`${meshID}_${count}`, {size: 1, wrap: true}, scene);
+            
+            const oreMaterial = new BABYLON.PBRMaterial(`oreMaterial-${x}_${y}_${z}`, scene);
+            oreMaterial.useVertexColors = true;
+            oreMaterial.baseColor = oreMaterial.diffuseColor = new BABYLON.Color3(1, 1, 1);
+            oreMaterial.ambientColor = new BABYLON.Color3(1, 1, 1);
+            oreMaterial.specularColor = new BABYLON.Color3(0.5, 0.5, 0.5);
+            oreMaterial.alphaMode = 2;
+            
+            oreMaterial.roughness = 1;
+            oreMaterial.metallic = 0;
+            
+            let materials = [];
+            if (ores[ore]?.multipleTextures) {
+                for (let i = 0; i < 6; i++) {
+                    const mat = new BABYLON.PBRMaterial(`oreMaterial-${x}_${y}_${z}-${i}`, scene);
+                    mat.useVertexColors = true;
+                    mat.baseColor = mat.diffuseColor = new BABYLON.Color3(1, 1, 1);
+                    mat.ambientColor = new BABYLON.Color3(1, 1, 1);
+                    mat.specularColor = ore === bg || ores[ore]?.singleLayer ? new BABYLON.Color3(0.5, 0.5, 0.5) : new BABYLON.Color3(0, 0, 0);
+                    mat.alphaMode = 2;
+                    mat.baseTexture = mat.albedoTexture = mat.opacityTexture = getTexture(ore, i);
+                    
+                    mat.roughness = 1;
+                    mat.metallic = 0;
+                    materials.push(mat);
+                }
+            } else {
+                materials.push(oreMaterial);
+            }
+            
+            const backgroundMaterial = new BABYLON.PBRMaterial(`backgroundMaterial-${x}_${y}_${z}`, scene);
+            backgroundMaterial.useVertexColors = true;
+            backgroundMaterial.baseColor = backgroundMaterial.diffuseColor = new BABYLON.Color3(1, 1, 1);
+            backgroundMaterial.ambientColor = new BABYLON.Color3(1, 1, 1);
+            backgroundMaterial.specularColor = new BABYLON.Color3(0, 0, 0);
+            
+            const bgMaterials = [];
+            if (ores[bg]?.multipleTextures) {
+                for (let i = 0; i < 6; i++) {
+                    const mat = new BABYLON.PBRMaterial(`backgroundMaterial-${x}_${y}_${z}-${i}`, scene);
+                    mat.useVertexColors = true;
+                    mat.baseColor = mat.diffuseColor = new BABYLON.Color3(1, 1, 1);
+                    mat.ambientColor = new BABYLON.Color3(1, 1, 1);
+                    mat.specularColor = ores[bg]?.singleLayer ? new BABYLON.Color3(0.5, 0.5, 0.5) : new BABYLON.Color3(0, 0, 0);
+                    mat.baseTexture = mat.albedoTexture = getTexture(bg, i);
+                    
+                    mat.roughness = 1;
+                    mat.metallic = 0;
+                    bgMaterials.push(mat);
+                }
+            } else {
+                bgMaterials.push(backgroundMaterial);
+            }
+            
+            if (ores[ore]?.emissive) {
+                for (const oreMaterial of materials) {
+                    oreMaterial.emissiveColor = getColor(ores[ore].emissive.col ?? "#ffffff");
+                    oreMaterial.emissiveIntensity = ores[ore].emissive.str ?? 1;
+                }
+            }
+            if (ores[ore]?.light) {
+                oreMesh.receiveShadows = false;
+                if (!ores[ore].emissive) {
+                    for (const oreMaterial of materials) {
+                        oreMaterial.emissiveColor = new BABYLON.Color3(1, 1, 1);
+                        oreMaterial.emissiveIntensity = ores[ore].light.str;
+                    }
+                }
+            }
+            oreMaterial.albedoTexture = oreMaterial.baseTexture = getTexture(ore);
+            oreMaterial.opacityTexture = getTexture(ore);
+            if (ores[ore]?.light || ores[ore]?.emissive) {
+                if (!ores[ore]?.multipleTextures)
+                    oreMaterial.emissiveTexture = getTexture(ore, null, "emissive");
+                else {
+                    for (let i = 0; i < materials.length; i++) {
+                        materials[i].emissiveTexture = getTexture(ore, i, "emissive");
+                    }
+                }
+            }
+            backgroundMaterial.albedoTexture = backgroundMaterial.baseTexture = ores[ore]?.singleLayer ? getTexture(ore) : getTexture(bg);
+            backgroundMaterial.diffuseTexture = getTexture(bg);
+            
+            if (ores[ore]?.textureHasTransparency) {
+                backgroundMaterial.alpha = 0;
+                
+                for (const oreMaterial of materials) {
+                    oreMaterial.transparencyMode = BABYLON.PBRMaterial.PBRMATERIAL_ALPHATEST;
+                }
+            }
+
+            if (ores[ore].singleLayer || ores[ore].forcedBG) {
+                oreMaterial.roughness = 1;
+                oreMaterial.metallic = 0;
+
+                // bgMaterials.length = 0;
+                // bgMaterials.push(backgroundMaterial);
+            }
+            
+            backgroundMaterial.roughness = 1;
+            backgroundMaterial.metallic = 0;
+            
+            oreMaterial.usePhysicalLightFalloff = false;
+            backgroundMaterial.usePhysicalLightFalloff = false;
+            
+            const multiMaterial = new BABYLON.MultiMaterial(`multi-${x}_${y}_${z}`, scene);
+            multiMaterial.subMaterials.push(...bgMaterials, ...materials);
+            oreMesh.material = multiMaterial;
+            
+            oreMesh.releaseSubMeshes();
+            const vertices = oreMesh.getTotalVertices();
+            const indices = oreMesh.getTotalIndices();
+            if (bgMaterials.length === 1) new BABYLON.SubMesh(0, 0, vertices, 0, indices, oreMesh);
+            else if (bgMaterials.length === 6) {
+                const faceVertexCount = vertices / 6;
+                for (let i = 0; i < 6; i++) {
+                    new BABYLON.SubMesh(i, i * faceVertexCount, faceVertexCount, i * 6, 6, oreMesh);
+                }
+            }
+            if (materials.length === 1) new BABYLON.SubMesh(bgMaterials.length, 0, vertices, 0, indices, oreMesh);
+            else if (materials.length === 6) {
+                const faceVertexCount = vertices / 6;
+                for (let i = 0; i < 6; i++) {
+                    new BABYLON.SubMesh(i + bgMaterials.length, i * faceVertexCount, faceVertexCount, i * 6, 6, oreMesh);
+                }
+            }
+        }
+        
+        oreMesh.position.set(...chunkSplit);
+        
         oreMesh.metadata = {ore, background: bg, coords: [], type: "ore"};
         if (USE_THIN_INSTANCES) oreMesh.thinInstanceEnablePicking = true; // allow picking by raycast
-        const oreMaterial = new BABYLON.PBRMaterial(`oreMaterial-${x}_${y}_${z}`, scene);
-        oreMaterial.useVertexColors = true;
-        oreMaterial.baseColor = oreMaterial.diffuseColor = new BABYLON.Color3(1, 1, 1);
-        oreMaterial.ambientColor = new BABYLON.Color3(1, 1, 1);
-        oreMaterial.specularColor = new BABYLON.Color3(0.5, 0.5, 0.5);
-        oreMaterial.alphaMode = 2;
-        
-        oreMaterial.roughness = 1;
-        oreMaterial.metallic = 0;
-
-        let materials = [];
-        if (ores[ore]?.multipleTextures) {
-            for (let i = 0; i < 6; i++) {
-                const mat = new BABYLON.PBRMaterial(`oreMaterial-${x}_${y}_${z}-${i}`, scene);
-                mat.useVertexColors = true;
-                mat.baseColor = mat.diffuseColor = new BABYLON.Color3(1, 1, 1);
-                mat.ambientColor = new BABYLON.Color3(1, 1, 1);
-                mat.specularColor = ore === bg || ores[ore]?.singleLayer ? new BABYLON.Color3(0.5, 0.5, 0.5) : new BABYLON.Color3(0, 0, 0);
-                mat.alphaMode = 2;
-                mat.baseTexture = mat.albedoTexture = mat.opacityTexture = getTexture(ore, i);
-        
-                mat.roughness = 1;
-                mat.metallic = 0;
-                materials.push(mat);
-            }
-        } else {
-            materials.push(oreMaterial);
-        }
-        
-        const backgroundMaterial = new BABYLON.PBRMaterial(`backgroundMaterial-${x}_${y}_${z}`, scene);
-        backgroundMaterial.useVertexColors = true;
-        backgroundMaterial.baseColor = backgroundMaterial.diffuseColor = new BABYLON.Color3(1, 1, 1);
-        backgroundMaterial.ambientColor = new BABYLON.Color3(1, 1, 1);
-        backgroundMaterial.specularColor = new BABYLON.Color3(0, 0, 0);
-        
-        if (ores[ore]?.emissive) {
-            for (const oreMaterial of materials) {
-                oreMaterial.emissiveColor = getColor(ores[ore].emissive.col ?? "#ffffff");
-                oreMaterial.emissiveIntensity = ores[ore].emissive.str ?? 1;
-            }
-        }
-        if (ores[ore]?.light) {
-            oreMesh.receiveShadows = false;
-            if (!ores[ore].emissive) {
-                for (const oreMaterial of materials) {
-                    oreMaterial.emissiveColor = new BABYLON.Color3(1, 1, 1);
-                    oreMaterial.emissiveIntensity = ores[ore].light.str;
-                }
-            }
-        }
-        oreMaterial.albedoTexture = oreMaterial.baseTexture = getTexture(ore);
-        oreMaterial.opacityTexture = getTexture(ore);
-        if (ores[ore]?.light || ores[ore]?.emissive) {
-            if (!ores[ore]?.multipleTextures)
-                oreMaterial.emissiveTexture = getTexture(ore, null, "emissive");
-            else {
-                for (let i = 0; i < materials.length; i++) {
-                    materials[i].emissiveTexture = getTexture(ore, i, "emissive");
-                }
-            }
-        }
-        backgroundMaterial.albedoTexture = backgroundMaterial.baseTexture = ores[ore]?.singleLayer ? getTexture(ore) : getTexture(bg);
-        backgroundMaterial.diffuseTexture = getTexture(bg);
-        
-        if (ores[ore]?.textureHasTransparency) {
-            backgroundMaterial.alpha = 0;
-            
-            for (const oreMaterial of materials) {
-                oreMaterial.transparencyMode = BABYLON.PBRMaterial.PBRMATERIAL_ALPHATEST;
-            }
-        }
-
-        backgroundMaterial.roughness = 1;
-        backgroundMaterial.metallic = 0;
-        
-        oreMaterial.usePhysicalLightFalloff = false;
-        backgroundMaterial.usePhysicalLightFalloff = false;
-        
-        const multiMaterial = new BABYLON.MultiMaterial(`multi-${x}_${y}_${z}`, scene);
-        multiMaterial.subMaterials.push(backgroundMaterial, ...materials);
-        oreMesh.material = multiMaterial;
-        
-        oreMesh.releaseSubMeshes();
-        const vertices = oreMesh.getTotalVertices();
-        const indices = oreMesh.getTotalIndices();
-        new BABYLON.SubMesh(0, 0, vertices, 0, indices, oreMesh);
-        if (materials.length === 1) new BABYLON.SubMesh(1, 0, vertices, 0, indices, oreMesh);
-        else {
-            const faceVertexCount = vertices / 6;
-            for (let i = 0; i < 6; i++) {
-                new BABYLON.SubMesh(i + 1, i * faceVertexCount, faceVertexCount, i * 6, 6, oreMesh);
-            }
-        }
         
         meshes[`${meshID}_${count}`] = oreMesh;
     }
     
     // create an instance of the mesh for better performance
     if (USE_THIN_INSTANCES) {
-        const matrix = BABYLON.Matrix.Scaling(settings.scale.x, settings.scale.y, settings.scale.z).multiply(BABYLON.Matrix.RotationYawPitchRoll(settings.rotation.y, settings.rotation.x, settings.rotation.z)).multiply(BABYLON.Matrix.Translation(x + settings.offset.x, y + settings.offset.y, z + settings.offset.z));
+        const matrix = BABYLON.Matrix.Scaling(settings.scale.x, settings.scale.y, settings.scale.z)
+        .multiply(BABYLON.Matrix.Translation(settings.offset.x, settings.offset.y, settings.offset.z))
+        .multiply(BABYLON.Matrix.RotationYawPitchRoll(settings.rotation.y, settings.rotation.x, settings.rotation.z))
+        .multiply(BABYLON.Matrix.Translation(x - chunkSplit[0], y - chunkSplit[1], z - chunkSplit[2]));
         meshes[`${meshID}_${count}`].thinInstanceAdd(matrix);
         const index = meshes[`${meshID}_${count}`].thinInstanceCount - 1;
         meshes[`${meshID}_${count}`].metadata.coords[index] = {x, y, z};
-
+        
+        // meshesNeedingUpdate.add(`${meshID}_${count}`);
+        
         /** @type {BABYLON.Mesh} */
         const mesh = meshes[`${meshID}_${count}`];
         mesh.metadata.thinInstanceColors ??= [];
@@ -647,7 +728,7 @@ export function generateOre(x, y, z, ore, bg, settings) {
         instance.position = new BABYLON.Vector3(x, y, z);
         instance.metadata = {ore, background: bg, coords: {x, y, z}};
     }
-
+    
     let bounds = new BABYLON.Vector3(
         settings.scale.x * (ores[ore].boundingBox?.x || 1),
         settings.scale.y * (ores[ore].boundingBox?.y || 1),
@@ -658,7 +739,7 @@ export function generateOre(x, y, z, ore, bg, settings) {
         bounds.rotateByQuaternionToRef(BABYLON.Quaternion.FromEulerVector(new BABYLON.Vector3(settings.rotation.x, settings.rotation.y, settings.rotation.z)), bounds);
         bounds = new BABYLON.Vector3(Math.abs(bounds.x), Math.abs(bounds.y), Math.abs(bounds.z));
     }
-
+    
     m(x, y, z, {
         ore, background: bg,
         offset: settings.offset,
@@ -706,7 +787,7 @@ export function generateOre(x, y, z, ore, bg, settings) {
         
         container.addLight(pointLight);
     }
-
+    
     if (ores[ore]?.onGenerate) ores[ore].onGenerate(x, y, z, settings, m(x, y, z));
     
     return m(x, y, z);
@@ -735,7 +816,7 @@ function removeOre(x, y, z, settings = {}) {
                         const last = matrices[lastIndex];
                         mesh.thinInstanceSetMatrixAt(index, last);
                     }
-
+                    
                     const movedCoord = mesh.metadata?.coords?.[lastIndex];
                     if (index !== lastIndex && movedCoord) {
                         const movedOre = m(movedCoord.x, movedCoord.y, movedCoord.z);
@@ -759,16 +840,15 @@ function removeOre(x, y, z, settings = {}) {
                     scene.remove(audio);
                     } */
                     const light = lightArr.find(l => l.name === `light0-${x}-${y}-${z}`);
-                    if (light) {
+                    if (light !== undefined) {
                         const idx = lightArr.indexOf(light);
                         if (idx !== -1) lightArr.splice(idx, 1);
                         /** @type {BABYLON.ClusteredLightContainer} */
                         const container = lightContainers["0"];
                         const pointLight = lightKeys[`${x}_${y}_${z}`];
-                        if (pointLight) {
+                        if (pointLight !== undefined) {
                             pointLight.intensity = 0;
                             scene.removeLight(pointLight);
-                            lightContainers["0"].removeLight(pointLight);
                             delete lightKeys[`${x}_${y}_${z}`];
                         } else {
                             console.warn(`Light for ${x}_${y}_${z} not found in lightKeys.`);
@@ -838,7 +918,7 @@ function getPickedOreCoords(hit) {
     if (!hit?.hit || !hit.pickedMesh) return null;
     const metadata = hit.pickedMesh.metadata;
     if (!metadata) return null;
-
+    
     const index = hit.thinInstanceIndex;
     let coords;
     if (Number.isInteger(index) && index >= 0) {
@@ -846,11 +926,11 @@ function getPickedOreCoords(hit) {
     } else {
         coords = metadata.coords;
     }
-
+    
     if (!coords) return null;
     const x = Math.round(coords.x), y = Math.round(coords.y), z = Math.round(coords.z);
     if (![x, y, z].every(Number.isFinite)) return null;
-
+    
     const oreData = m(x, y, z);
     if (!oreData?.ore) return null;
     return {x, y, z, oreData};
@@ -864,11 +944,12 @@ function getChunk(x, y, z) {
     return chunks[`${x}_${y}_${z}`];
 }
 
-function getChunkKey(x, y, z, size) {
+function getChunkKey(x, y, z, size, split) {
     const chunkX = Math.floor(x / size);
     const chunkY = Math.floor(y / size);
     const chunkZ = Math.floor(z / size);
-    return `${chunkX}_${chunkY}_${chunkZ}`;
+    if (!split) return `${chunkX}_${chunkY}_${chunkZ}`;
+    else return [chunkX, chunkY, chunkZ];
 }
 
 window.removeOre = removeOre;
@@ -887,12 +968,12 @@ function spawnOre(x, y, z, settings) {
     settings.all = true;
     settings.cave = {};
     settings.scale = {};
-
+    
     for (let i = 0; i < structureArray.length; i++) {
         const structure = structureArray[i];
         if (structure.chance === 0) continue;
         if (!Number.isFinite(structure.width) || !Number.isFinite(structure.height) || !Number.isFinite(structure.depth)) continue;
-
+        
         let gridX = Math.floor((x - structure.gridOffset.x) / structure.width);
         let gridY = Math.floor((y - structure.gridOffset.y) / structure.height);
         let gridZ = Math.floor((z - structure.gridOffset.z) / structure.depth);
@@ -901,343 +982,343 @@ function spawnOre(x, y, z, settings) {
             const centerX = structurePos.centerX;
             const centerY = structurePos.centerY;
             const centerZ = structurePos.centerZ;
-
+            
             if ((x < structurePos.x || x >= structurePos.x + structure.width ||
                 y < structurePos.y || y >= structurePos.y + structure.height ||
                 z < structurePos.z || z >= structurePos.z + structure.depth)) return false;
-
-            return {centerX, centerY, centerZ};
-        }
-
-        let testResult = test(gridX, gridY, gridZ);
-        if (!testResult) {
-            for (let xOff = -1; xOff <= 1; xOff++) {
-                for (let yOff = -1; yOff <= 1; yOff++) {
-                    for (let zOff = -1; zOff <= 1; zOff++) {
-                        if (xOff === 0 && yOff === 0 && zOff === 0) continue;
-                        const newTestResult = test(gridX + xOff, gridY + yOff, gridZ + zOff);
-                        if (newTestResult) {
-                            testResult = newTestResult;
-                            gridX += xOff;
-                            gridY += yOff;
-                            gridZ += zOff;
-                            break;
-                        }
-                    }
-                }
+                
+                return {centerX, centerY, centerZ};
             }
-        }
-
-        const {centerX, centerY, centerZ} = testResult || {};
-        if (!centerX) continue;
-
-        const structureNoiseVal = noise(centerX, centerY, centerZ);
-        if (structure.caveExclusive !== undefined && (structureNoiseVal.value > structureNoiseVal.caveReq !== structure.caveExclusive)) continue;
-
-        const exists = rand01(gridX, gridY, gridZ, vars.seed) < calculateRarity(structure, centerY, centerX, centerZ);
-        if (exists && !(generatedStructures[structure.id] && generatedStructures[structure.id][`${gridX}_${gridY}_${gridZ}`])) {
-            generateStructure(gridX, gridY, gridZ, structure.id, {centerX, centerY, centerZ});
-            return m(x, y, z);
-        }
-    }
-
-    const noiseVal = noise(x, y, z);
-    if (noiseVal.value > noiseVal.caveReq && !m(x, y, z)?.temp) {
-        if (!settings.noCave) generateCave(x, y, z);
-        return m(x, y, z);
-    }
-    
-    if (isCaveFloor(x, y, z)) settings.isCaveFloor = true;
-    if (isCaveCeiling(x, y, z)) settings.isCaveCeiling = true;
-    if (!Object.keys(settings.cave).length) delete settings.cave;
-    
-    let oreData;
-
-    if (m(x, y, z)?.temp) {
-        const data = m(x, y, z);
-        oreData = {};
-
-        if (data.dripstone) {
-            settings.noVein = true;
-            settings.noGeode = true;
-            oreData.ore = oreData.bg = getBGOre(x, Math.round(y - 5 + data.dripstone * 5), z);
-            settings.scale.x = settings.scale.z = data.dripstone;
-        } else {
-            settings.cave = {};
-            settings.caveAir = true;
-            if (data.caveFloor) {
-                settings.cave = { floor: true };
-            }
-            if (data.caveCeiling) {
-                settings.cave.ceiling = true;
-            }
-            if (data.caveWall) {
-                settings.cave.walls = data.caveWall;
-            }
-            settings.cave.air = true;
-            if (!Object.keys(settings.cave).length) return m(x, y, z, { ore: "air", caveType: data.caveType });
-        }
-    }
-
-    if (!oreData?.ore) {
-        oreData = getOre(x, y, z, settings);
-    }
-    if (!oreData || oreData.ore === null) {
-        m(x, y, z, true);
-        return m(x, y, z);
-    }
-    settings.chance = oreData.chance;
-    
-    generateOre(x, y, z, oreData.ore, oreData.bg, settings);
-    
-    if (ores[oreData.ore]?.tree) {
-        let h = ores[oreData.ore].tree.height || { min: 4, max: 4 };
-        if (typeof h === "number") h = { min: h, max: h };
-        const height = Math.floor(Math.random() * (h.max - h.min + 1)) + h.min;
-        generateTree(
-            x, y, z,
-            oreData.ore,
-            typeof ores[oreData.ore].tree.leaves.block === "function" ? ores[oreData.ore].tree.leaves.block(x, y, z) : ores[oreData.ore].tree.leaves.block,
-            height,
-            typeof ores[oreData.ore].tree.leaves.size === "function" ? ores[oreData.ore].tree.leaves.size(x, y, z) : ores[oreData.ore].tree.leaves.size,
-            settings
-        );
-    }
-    return m(x, y, z);
-}
-
-function generateAdjacent(x, y, z, settings) {
-    if (settings === true) settings = {caveExclusive: true};
-    spawnOre(x + 1, y, z, settings);
-    spawnOre(x - 1, y, z, settings);
-    spawnOre(x, y + 1, z, settings);
-    spawnOre(x, y - 1, z, settings);
-    spawnOre(x, y, z + 1, settings);
-    spawnOre(x, y, z - 1, settings);
-}
-
-function generateCave(x, y, z) {
-    x = Math.round(x);
-    y = Math.round(y);
-    z = Math.round(z);
-    
-    workers.findEmpty.postMessage({x, y, z, seed: vars.seed});
-}
-
-workers.findEmpty.addEventListener("message", e => {
-    const data = e.data;
-    const {mToSend, mToModify, priorityChunksToAdd} = data;
-
-    for (let i = 0; i < mToSend.length; i++) {
-        if (!m(...(mToSend[i].slice(0, 3)))) {
-            m(...mToSend[i]);
-        }
-    }
-    for (let i = 0; i < mToModify.length; i++) {
-        const j = mToModify[i];
-        m(j[0], j[1], j[2])[j[3]] = j[4];
-    }
-    priorityChunks3 = new Set([...priorityChunks3, ...priorityChunksToAdd]);
-});
-
-function generateTree(x, y, z, trunk, leaves, height = 4, leafSize = 2, settings = {}) {
-    settings.isTree = true;
-    settings.isVein = true;
-    for (let y1 = y; y1 < y + height; y1++) {
-        generateOre(x, y1, z, trunk, trunk, settings);
-    }
-    for (let x1 = x - leafSize; x1 <= x + leafSize; x1++) {
-        for (let y1 = y + height - leafSize; y1 <= y + height + leafSize; y1++) {
-            for (let z1 = z - leafSize; z1 <= z + leafSize; z1++) {
-                if (Math.sqrt((x1 - x) ** 2 + (y1 - y - height) ** 2 + (z1 - z) ** 2) < leafSize + 0.5) {
-                    generateOre(x1, y1, z1, leaves, leaves, settings);
-                }
-            }
-        }
-    }
-}
-
-function getStructurePlacementData(structure, gridX, gridY, gridZ) {
-    const structureID = structure.id || "unknown";
-    const structureSeed = structureID.split("").reduce((seed, char) => (seed * 31 + char.charCodeAt(0)) | 0, 0);
-    const getStructureOffset = (axis, maxOffset) => {
-        if (maxOffset <= 0) return 0;
-        const salt = axis === "x" ? 137 : axis === "y" ? 911 : 2713;
-        const value = rand01(gridX + salt, gridY - salt, gridZ + salt, vars.seed ^ structureSeed);
-        return Math.floor(value * (maxOffset * 2 + 1)) - maxOffset;
-    };
-
-    const gridJitter = typeof structure.gridJitter === "number" ? Math.max(0, Math.min(1, structure.gridJitter)) : 1;
-    const maxOffsetX = Math.floor((structure.width - 1) * gridJitter);
-    const maxOffsetY = Math.floor((structure.height - 1) * gridJitter);
-    const maxOffsetZ = Math.floor((structure.depth - 1) * gridJitter);
-    const jitterX = getStructureOffset("x", maxOffsetX);
-    const jitterY = getStructureOffset("y", maxOffsetY);
-    const jitterZ = getStructureOffset("z", maxOffsetZ);
-
-    const x = gridX * structure.width + structure.gridOffset.x + jitterX;
-    const y = gridY * structure.height + structure.gridOffset.y + jitterY;
-    const z = gridZ * structure.depth + structure.gridOffset.z + jitterZ;
-
-    return {
-        x,
-        y,
-        z,
-        centerX: Math.floor(x + structure.width / 2),
-        centerY: Math.floor(y + structure.height / 2),
-        centerZ: Math.floor(z + structure.depth / 2)
-    };
-}
-
-export function generateStructure(gridX, gridY, gridZ, structure, settings) {
-    if (settings === undefined) settings = {};
-    if (settings === true) settings = {forceLocation: true};
-    const str = structures[structure];
-    if (!generatedStructures[structure]) generatedStructures[structure] = {};
-    if (!str) return;
-
-    const structurePos = getStructurePlacementData(str, gridX, gridY, gridZ);
-    let x = structurePos.x;
-    let y = structurePos.y;
-    let z = structurePos.z;
-    if (settings.centerX === undefined) settings.centerX = structurePos.centerX;
-    if (settings.centerY === undefined) settings.centerY = structurePos.centerY;
-    if (settings.centerZ === undefined) settings.centerZ = structurePos.centerZ;
-
-    if (settings.absPos) {
-        if (!settings.noCenter) {
-            x = gridX - Math.floor(str.width / 2);
-            y = gridY - Math.floor(str.height / 2);
-            z = gridZ - Math.floor(str.depth / 2);
-
-            settings.centerX = gridX;
-            settings.centerY = gridY;
-            settings.centerZ = gridZ;
-        } else {
-            x = gridX;
-            y = gridY;
-            z = gridZ;
-
-            settings.centerX = gridX + Math.floor(str.width / 2);
-            settings.centerY = gridY + Math.floor(str.height / 2);
-            settings.centerZ = gridZ + Math.floor(str.depth / 2);
-        }
-    } else {
-        generatedStructures[structure][`${gridX}_${gridY}_${gridZ}`] = true;
-    }
-
-    let empty = [];
-
-    if (str.key && str.layout) {
-        const key = JSON.parse(JSON.stringify(str.key));
-        for (const k in str.key) {
-            if (typeof str.key[k] === "function") {
-                key[k] = str.key[k](x, y, z);
-            }
-        }
-        for (const y1 in str.layout) {
-            for (const x1 in str.layout[y1]) {
-                for (const z1 in str.layout[y1][x1]) {
-                    const block = key[str.layout[y1][x1][z1]];
-                    
-                    const x2 = x + Number(x1);
-                    const y2 = y + Number(y1);
-                    const z2 = z + Number(z1);
-
-                    if (block === null) continue;
-                    if (block) {
-                        if (m(x2, y2, z2) && !settings.forced && !m(x2, y2, z2).temp) continue;
-                        if (block === "air") {
-                            if (settings.forced) removeOre(x2, y2, z2, {type: "structure"});
-                            m(x2, y2, z2, true);
-                            empty.push(x2, y2, z2);
-                        } else if (ores[block]) {
-                            if (settings.forced) removeOre(x2, y2, z2, {fullyRemove: true, type: "structure"});
-                            generateOre(x2, y2, z2, block, getBGOre(x2, y2, z2), settings || {noUpdate: true});
-                            if (ores[block].textureHasTransparency && !ores[block].allowTransparent || ores[block].forceAdjacent) {
-                                empty.push(x2, y2, z2);
+            
+            let testResult = test(gridX, gridY, gridZ);
+            if (!testResult) {
+                for (let xOff = -1; xOff <= 1; xOff++) {
+                    for (let yOff = -1; yOff <= 1; yOff++) {
+                        for (let zOff = -1; zOff <= 1; zOff++) {
+                            if (xOff === 0 && yOff === 0 && zOff === 0) continue;
+                            const newTestResult = test(gridX + xOff, gridY + yOff, gridZ + zOff);
+                            if (newTestResult) {
+                                testResult = newTestResult;
+                                gridX += xOff;
+                                gridY += yOff;
+                                gridZ += zOff;
+                                break;
                             }
                         }
                     }
                 }
             }
+            
+            const {centerX, centerY, centerZ} = testResult || {};
+            if (!centerX) continue;
+            
+            const structureNoiseVal = noise(centerX, centerY, centerZ);
+            if (structure.caveExclusive !== undefined && (structureNoiseVal.value > structureNoiseVal.caveReq !== structure.caveExclusive)) continue;
+            
+            const exists = rand01(gridX, gridY, gridZ, vars.seed) < calculateRarity(structure, centerY, centerX, centerZ);
+            if (exists && !(generatedStructures[structure.id] && generatedStructures[structure.id][`${gridX}_${gridY}_${gridZ}`])) {
+                generateStructure(gridX, gridY, gridZ, structure.id, {centerX, centerY, centerZ});
+                return m(x, y, z);
+            }
         }
-    } else if (str.format === "snbt" || str.palette && str.blocks) {
-        const palette = str.palette;
-        for (let i = 0; i < str.blocks.length; i++) {
-            const {pos, state} = str.blocks[i];
-            if (palette[state].name === "air") {
-                if (settings.forced) removeOre(x + pos[0], y + pos[1], z + pos[2], {type: "structure"});
-                m(x + pos[0], y + pos[1], z + pos[2], true);
-                empty.push(x + pos[0], y + pos[1], z + pos[2]);
-                continue;
-            } else if (palette[state].name === "structureVoid") {
-                if (settings.forced) removeOre(x + pos[0], y + pos[1], z + pos[2], {fullyRemove: true, type: "structure"});
-                continue;
+        
+        const noiseVal = noise(x, y, z);
+        if (noiseVal.value > noiseVal.caveReq && !m(x, y, z)?.temp) {
+            if (!settings.noCave) generateCave(x, y, z);
+            return m(x, y, z);
+        }
+        
+        if (isCaveFloor(x, y, z)) settings.isCaveFloor = true;
+        if (isCaveCeiling(x, y, z)) settings.isCaveCeiling = true;
+        if (!Object.keys(settings.cave).length) delete settings.cave;
+        
+        let oreData;
+        
+        if (m(x, y, z)?.temp) {
+            const data = m(x, y, z);
+            oreData = {};
+            
+            if (data.dripstone) {
+                settings.noVein = true;
+                settings.noGeode = true;
+                oreData.ore = oreData.bg = getBGOre(x, Math.round(y - 5 + data.dripstone * 5), z);
+                settings.scale.x = settings.scale.z = data.dripstone;
+            } else {
+                settings.cave = {};
+                settings.caveAir = true;
+                if (data.caveFloor) {
+                    settings.cave = { floor: true };
+                }
+                if (data.caveCeiling) {
+                    settings.cave.ceiling = true;
+                }
+                if (data.caveWall) {
+                    settings.cave.walls = data.caveWall;
+                }
+                settings.cave.air = true;
+                if (!Object.keys(settings.cave).length) return m(x, y, z, { ore: "air", caveType: data.caveType });
             }
-            if (ores[palette[state].name].textureHasTransparency && !ores[palette[state].name].allowTransparent || ores[palette[state].name].forceAdjacent) {
-                empty.push(x + pos[0], y + pos[1], z + pos[2]);
-            }
-            if (settings.forced) removeOre(x + pos[0], y + pos[1], z + pos[2], {fullyRemove: true, type: "structure"});
-            generateOre(
-                x + pos[0],
-                y + pos[1],
-                z + pos[2],
-                palette[state].name,
-                getBGOre(x + pos[0], y + pos[1], z + pos[2]),
-                settings || { noUpdate: true }
+        }
+        
+        if (!oreData?.ore) {
+            oreData = getOre(x, y, z, settings);
+        }
+        if (!oreData || oreData.ore === null) {
+            m(x, y, z, true);
+            return m(x, y, z);
+        }
+        settings.chance = oreData.chance;
+        
+        generateOre(x, y, z, oreData.ore, oreData.bg, settings);
+        
+        if (ores[oreData.ore]?.tree) {
+            let h = ores[oreData.ore].tree.height || { min: 4, max: 4 };
+            if (typeof h === "number") h = { min: h, max: h };
+            const height = Math.floor(Math.random() * (h.max - h.min + 1)) + h.min;
+            generateTree(
+                x, y, z,
+                oreData.ore,
+                typeof ores[oreData.ore].tree.leaves.block === "function" ? ores[oreData.ore].tree.leaves.block(x, y, z) : ores[oreData.ore].tree.leaves.block,
+                height,
+                typeof ores[oreData.ore].tree.leaves.size === "function" ? ores[oreData.ore].tree.leaves.size(x, y, z) : ores[oreData.ore].tree.leaves.size,
+                settings
             );
         }
+        return m(x, y, z);
     }
-
-    for (let i = 0; i < empty.length; i += 3) {
-        const x1 = empty[i];
-        const y1 = empty[i + 1];
-        const z1 = empty[i + 2];
-        generateAdjacent(x1, y1, z1, {noUpdate: true});
+    
+    function generateAdjacent(x, y, z, settings) {
+        if (settings === true) settings = {caveExclusive: true};
+        spawnOre(x + 1, y, z, settings);
+        spawnOre(x - 1, y, z, settings);
+        spawnOre(x, y + 1, z, settings);
+        spawnOre(x, y - 1, z, settings);
+        spawnOre(x, y, z + 1, settings);
+        spawnOre(x, y, z - 1, settings);
     }
-
-    if (str.onGenerate) str.onGenerate(x, y, z);
-
-    console.log(`Generated structure ${structure} at ${settings.centerX}, ${settings.centerY}, ${settings.centerZ} (grid: ${gridX}, ${gridY}, ${gridZ}; world: ${x}, ${y}, ${z})`);
-}
-
-function generateChunk(x, z) {
-    const sets = {noVein: true, noGeode: true, forceReplace: ["leaves", "autumnalLeaves"], surface: true};
-    const sets2 = {noVein: true, noGeode: true, forceReplace: ["leaves", "autumnalLeaves"]};
-    for (let x1 = x * CHUNK_SIZE; x1 < (x + 1) * CHUNK_SIZE; x1++) {
-        for (let z1 = z * CHUNK_SIZE; z1 < (z + 1) * CHUNK_SIZE; z1++) {
-            const y1 = topLayer(x1, z1);
-            spawnOre(x1, y1, z1, sets);
-            spawnOre(x1, y1 + 1, z1, sets);
-            let y = y1;
-            function check(y) {
-                for (const pos of [[x1 - 1, z1], [x1 + 1, z1], [x1, z1 - 1], [x1, z1 + 1]]) {
-                    if (y > topLayer(pos[0], pos[1])) return false;
+    
+    function generateCave(x, y, z) {
+        x = Math.round(x);
+        y = Math.round(y);
+        z = Math.round(z);
+        
+        workers.findEmpty.postMessage({x, y, z, seed: vars.seed});
+    }
+    
+    workers.findEmpty.addEventListener("message", e => {
+        const data = e.data;
+        const {mToSend, mToModify, priorityChunksToAdd} = data;
+        
+        for (let i = 0; i < mToSend.length; i++) {
+            if (!m(...(mToSend[i].slice(0, 3)))) {
+                m(...mToSend[i]);
+            }
+        }
+        for (let i = 0; i < mToModify.length; i++) {
+            const j = mToModify[i];
+            m(j[0], j[1], j[2])[j[3]] = j[4];
+        }
+        priorityChunks3 = new Set([...priorityChunks3, ...priorityChunksToAdd]);
+    });
+    
+    function generateTree(x, y, z, trunk, leaves, height = 4, leafSize = 2, settings = {}) {
+        settings.isTree = true;
+        settings.isVein = true;
+        for (let y1 = y; y1 < y + height; y1++) {
+            generateOre(x, y1, z, trunk, trunk, settings);
+        }
+        for (let x1 = x - leafSize; x1 <= x + leafSize; x1++) {
+            for (let y1 = y + height - leafSize; y1 <= y + height + leafSize; y1++) {
+                for (let z1 = z - leafSize; z1 <= z + leafSize; z1++) {
+                    if (Math.sqrt((x1 - x) ** 2 + (y1 - y - height) ** 2 + (z1 - z) ** 2) < leafSize + 0.5) {
+                        generateOre(x1, y1, z1, leaves, leaves, settings);
+                    }
                 }
-                return true;
             }
-            while (!check(--y)) {
-                spawnOre(x1, y, z1, sets2);
-            }
-            spawnOre(x1, layers.sky.min, z1, sets);
         }
     }
-}
-
-function generateChunk3(x, y, z, noCave = false) { // used for places like space
-    let generatedAny = false;
-    let startTime = performance.now();
-    const sets = {};
-    // 2if (noCave) sets.noCave = true;
-    for (let x1 = x * CHUNK_SIZE_3; x1 < (x + 1) * CHUNK_SIZE_3; x1++) {
-        for (let y1 = y * CHUNK_SIZE_3; y1 < (y + 1) * CHUNK_SIZE_3; y1++) {
-            for (let z1 = z * CHUNK_SIZE_3; z1 < (z + 1) * CHUNK_SIZE_3; z1++) {
-                const sets1 = {...sets};
-                if (m(x1, y1, z1) && !m(x1, y1, z1).temp) continue;
-                const isCaveAir = checkAdjacent(x1, y1, z1, isCave);
-                let caveData;
-                if (layers[getLayer(y1, x1, z1, false)].chunks !== "3d"
+    
+    function getStructurePlacementData(structure, gridX, gridY, gridZ) {
+        const structureID = structure.id || "unknown";
+        const structureSeed = structureID.split("").reduce((seed, char) => (seed * 31 + char.charCodeAt(0)) | 0, 0);
+        const getStructureOffset = (axis, maxOffset) => {
+            if (maxOffset <= 0) return 0;
+            const salt = axis === "x" ? 137 : axis === "y" ? 911 : 2713;
+            const value = rand01(gridX + salt, gridY - salt, gridZ + salt, vars.seed ^ structureSeed);
+            return Math.floor(value * (maxOffset * 2 + 1)) - maxOffset;
+        };
+        
+        const gridJitter = typeof structure.gridJitter === "number" ? Math.max(0, Math.min(1, structure.gridJitter)) : 1;
+        const maxOffsetX = Math.floor((structure.width - 1) * gridJitter);
+        const maxOffsetY = Math.floor((structure.height - 1) * gridJitter);
+        const maxOffsetZ = Math.floor((structure.depth - 1) * gridJitter);
+        const jitterX = getStructureOffset("x", maxOffsetX);
+        const jitterY = getStructureOffset("y", maxOffsetY);
+        const jitterZ = getStructureOffset("z", maxOffsetZ);
+        
+        const x = gridX * structure.width + structure.gridOffset.x + jitterX;
+        const y = gridY * structure.height + structure.gridOffset.y + jitterY;
+        const z = gridZ * structure.depth + structure.gridOffset.z + jitterZ;
+        
+        return {
+            x,
+            y,
+            z,
+            centerX: Math.floor(x + structure.width / 2),
+            centerY: Math.floor(y + structure.height / 2),
+            centerZ: Math.floor(z + structure.depth / 2)
+        };
+    }
+    
+    export function generateStructure(gridX, gridY, gridZ, structure, settings) {
+        if (settings === undefined) settings = {};
+        if (settings === true) settings = {forceLocation: true};
+        const str = structures[structure];
+        if (!generatedStructures[structure]) generatedStructures[structure] = {};
+        if (!str) return;
+        
+        const structurePos = getStructurePlacementData(str, gridX, gridY, gridZ);
+        let x = structurePos.x;
+        let y = structurePos.y;
+        let z = structurePos.z;
+        if (settings.centerX === undefined) settings.centerX = structurePos.centerX;
+        if (settings.centerY === undefined) settings.centerY = structurePos.centerY;
+        if (settings.centerZ === undefined) settings.centerZ = structurePos.centerZ;
+        
+        if (settings.absPos) {
+            if (!settings.noCenter) {
+                x = gridX - Math.floor(str.width / 2);
+                y = gridY - Math.floor(str.height / 2);
+                z = gridZ - Math.floor(str.depth / 2);
+                
+                settings.centerX = gridX;
+                settings.centerY = gridY;
+                settings.centerZ = gridZ;
+            } else {
+                x = gridX;
+                y = gridY;
+                z = gridZ;
+                
+                settings.centerX = gridX + Math.floor(str.width / 2);
+                settings.centerY = gridY + Math.floor(str.height / 2);
+                settings.centerZ = gridZ + Math.floor(str.depth / 2);
+            }
+        } else {
+            generatedStructures[structure][`${gridX}_${gridY}_${gridZ}`] = true;
+        }
+        
+        let empty = [];
+        
+        if (str.key && str.layout) {
+            const key = JSON.parse(JSON.stringify(str.key));
+            for (const k in str.key) {
+                if (typeof str.key[k] === "function") {
+                    key[k] = str.key[k](x, y, z);
+                }
+            }
+            for (const y1 in str.layout) {
+                for (const x1 in str.layout[y1]) {
+                    for (const z1 in str.layout[y1][x1]) {
+                        const block = key[str.layout[y1][x1][z1]];
+                        
+                        const x2 = x + Number(x1);
+                        const y2 = y + Number(y1);
+                        const z2 = z + Number(z1);
+                        
+                        if (block === null) continue;
+                        if (block) {
+                            if (m(x2, y2, z2) && !settings.forced && !m(x2, y2, z2).temp) continue;
+                            if (block === "air") {
+                                if (settings.forced) removeOre(x2, y2, z2, {type: "structure"});
+                                m(x2, y2, z2, true);
+                                empty.push(x2, y2, z2);
+                            } else if (ores[block]) {
+                                if (settings.forced) removeOre(x2, y2, z2, {fullyRemove: true, type: "structure"});
+                                generateOre(x2, y2, z2, block, getBGOre(x2, y2, z2), settings || {noUpdate: true});
+                                if (ores[block].textureHasTransparency && !ores[block].allowTransparent || ores[block].forceAdjacent) {
+                                    empty.push(x2, y2, z2);
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        } else if (str.format === "snbt" || str.palette && str.blocks) {
+            const palette = str.palette;
+            for (let i = 0; i < str.blocks.length; i++) {
+                const {pos, state} = str.blocks[i];
+                if (palette[state].name === "air") {
+                    if (settings.forced) removeOre(x + pos[0], y + pos[1], z + pos[2], {type: "structure"});
+                    m(x + pos[0], y + pos[1], z + pos[2], true);
+                    empty.push(x + pos[0], y + pos[1], z + pos[2]);
+                    continue;
+                } else if (palette[state].name === "structureVoid") {
+                    if (settings.forced) removeOre(x + pos[0], y + pos[1], z + pos[2], {fullyRemove: true, type: "structure"});
+                    continue;
+                }
+                if (ores[palette[state].name].textureHasTransparency && !ores[palette[state].name].allowTransparent || ores[palette[state].name].forceAdjacent) {
+                    empty.push(x + pos[0], y + pos[1], z + pos[2]);
+                }
+                if (settings.forced) removeOre(x + pos[0], y + pos[1], z + pos[2], {fullyRemove: true, type: "structure"});
+                generateOre(
+                    x + pos[0],
+                    y + pos[1],
+                    z + pos[2],
+                    palette[state].name,
+                    getBGOre(x + pos[0], y + pos[1], z + pos[2]),
+                    settings || { noUpdate: true }
+                );
+            }
+        }
+        
+        for (let i = 0; i < empty.length; i += 3) {
+            const x1 = empty[i];
+            const y1 = empty[i + 1];
+            const z1 = empty[i + 2];
+            generateAdjacent(x1, y1, z1, {noUpdate: true});
+        }
+        
+        if (str.onGenerate !== undefined) str.onGenerate(x, y, z);
+        
+        if (str.log !== false) console.log(`Generated structure ${structure} at ${settings.centerX}, ${settings.centerY}, ${settings.centerZ} (grid: ${gridX}, ${gridY}, ${gridZ}; world: ${x}, ${y}, ${z})`);
+    }
+    
+    function generateChunk(x, z) {
+        const sets = {noVein: true, noGeode: true, forceReplace: ["leaves", "autumnalLeaves"], surface: true};
+        const sets2 = {noVein: true, noGeode: true, forceReplace: ["leaves", "autumnalLeaves"]};
+        for (let x1 = x * CHUNK_SIZE; x1 < (x + 1) * CHUNK_SIZE; x1++) {
+            for (let z1 = z * CHUNK_SIZE; z1 < (z + 1) * CHUNK_SIZE; z1++) {
+                const y1 = topLayer(x1, z1);
+                spawnOre(x1, y1, z1, sets);
+                spawnOre(x1, y1 + 1, z1, sets);
+                let y = y1;
+                function check(y) {
+                    for (const pos of [[x1 - 1, z1], [x1 + 1, z1], [x1, z1 - 1], [x1, z1 + 1]]) {
+                        if (y > topLayer(pos[0], pos[1])) return false;
+                    }
+                    return true;
+                }
+                while (!check(--y)) {
+                    spawnOre(x1, y, z1, sets2);
+                }
+                spawnOre(x1, layers.sky.min, z1, sets);
+            }
+        }
+    }
+    
+    function generateChunk3(x, y, z, noCave = false) { // used for places like space
+        let generatedAny = false;
+        let startTime = performance.now();
+        const sets = {};
+        // 2if (noCave) sets.noCave = true;
+        for (let x1 = x * CHUNK_SIZE_3; x1 < (x + 1) * CHUNK_SIZE_3; x1++) {
+            for (let y1 = y * CHUNK_SIZE_3; y1 < (y + 1) * CHUNK_SIZE_3; y1++) {
+                for (let z1 = z * CHUNK_SIZE_3; z1 < (z + 1) * CHUNK_SIZE_3; z1++) {
+                    const sets1 = {...sets};
+                    if (m(x1, y1, z1) && !m(x1, y1, z1).temp) continue;
+                    const isCaveAir = checkAdjacent(x1, y1, z1, isCave);
+                    let caveData;
+                    if (layers[getLayer(y1, x1, z1, false)].chunks !== "3d"
                     && layers[getLayer(y1 - 1, x1, z1, false)].chunks !== "3d"
                     && layers[getLayer(y1 + 1, x1, z1, false)].chunks !== "3d"
                     && !isCaveAir
@@ -1255,7 +1336,7 @@ function generateChunk3(x, y, z, noCave = false) { // used for places like space
             }
         }
     }
-
+    
     return generatedAny;
 }
 
@@ -1347,10 +1428,8 @@ function loadNearbyChunks() {
 
 function miningTick() {
     let updatedBreak = false;
-    if (vars.miningStartTime < performance.now()) {
-        document.getElementById("miningTime").style.display = "block";
-        document.getElementById("mining-progress").style.display = "block";
-    }
+    document.getElementById("miningTime").style.display = "block";
+    document.getElementById("mining-progress").style.display = "block";
     
     const intersect = LAST_ORE[4];
     const oldIntersect = CURRENT_ORE[4];
@@ -1366,6 +1445,11 @@ function miningTick() {
             vars.miningStartTime = undefined;
             return;
         }
+    }
+
+    if (!(vars.miningStartTime < performance.now())) {
+        document.getElementById("miningTime").innerText = formatTime((m(x, y, z).str) / calculatePower(x, y, z) * (1 - (m(x, y, z).progress || 0))).replace("Infinity", "Unbreakable") + " + " + ((vars.miningStartTime - performance.now()) / 1000).toFixed(2) + " sec";
+        document.getElementById("miningTime").style.color = "#ff0";
     }
     
     CURRENT_ORE = LAST_ORE;
@@ -1384,6 +1468,7 @@ function miningTick() {
         mine(x, y, z);
     } else if (vars.miningStartTime < performance.now()) {
         document.getElementById("miningTime").innerText = formatTime((m(x, y, z).str) / calculatePower(x, y, z) * (1 - progress / 100)).replace("Infinity", "Unbreakable");
+        document.getElementById("miningTime").style.color = "#fff";
         document.getElementById("mining-progress").value = progress;
         document.getElementById("mining-progress").style.setProperty("--color", (m(x, y, z).color || m(x, y, z).ore ? ores[m(x, y, z).ore].color : "#888") || "#888");
         document.getElementById("mining-progress").style.setProperty("--size", document.getElementById("mining-progress").offsetWidth + "px");
@@ -1429,7 +1514,7 @@ function updateTopLeft() {
     
     document.getElementById("totalOres").innerText = `Ores: ${totalOres.toLocaleString()}
     Meshes: ${Object.keys(meshes).length.toLocaleString()}
-    Lights: ${lightArr.length.toLocaleString()}
+    Lights: ${lightArr.length.toLocaleString()} | ${scene.lights.length}
     Generating Chunks: ${generatingChunks.length.toLocaleString()}, ${generatingChunks3.length.toLocaleString()}
     Velocity: ${formatNum(player.velocity.x * 60, 2)}, ${formatNum(player.velocity.y * 60, 2)}, ${formatNum(player.velocity.z * 60, 2)}
     `;
@@ -1538,7 +1623,7 @@ function rightClick() {
     const raycaster = perspectiveCamera.getForwardRay();
     const hit = scene.pickWithRay(raycaster, pickPredicate);
     const used = useSelectedItem();
-
+    
     const picked = getPickedOreCoords(hit);
     if (!picked) return;
     /** @type {BABYLON.Mesh} */
@@ -1575,7 +1660,7 @@ function rightClick() {
             }
             
             generateOre(newX, newY, newZ, inventory.hotbar[inventory.SELECTED_HOTBAR], bg ?? "shale", placeSets);
-
+            
             if (checkCollision(player.position)) removeOre(newX, newY, newZ, placeSets);
             else inventory.addItem(inventory.hotbar[inventory.SELECTED_HOTBAR], -1);
         }
@@ -1596,7 +1681,7 @@ function useSelectedItem() {
                 cameraLight.intensity = ambientLight.intensity * 6;
                 document.getElementById("nightVisionOverlay").style.display = "none";
             } else {
-                cameraLight.diffuse = new BABYLON.Color3.FromHexString("#91eb36");
+                cameraLight.diffuse = BABYLON.Color3.FromHexString("#91eb36");
                 cameraLight.intensity = 5;
                 document.getElementById("nightVisionOverlay").style.display = "block";
             }
@@ -1608,6 +1693,9 @@ function useSelectedItem() {
 
 for (let i = 0; i < oreArray.length; i++) {
     const ore = oreArray[i];
+
+    if (ore.customModel && ore.noCollision === undefined) ore.noCollision = true;
+
     if (ore.getCanvas) {
         ore.canvasElem = document.createElement("canvas");
         ore.canvasElem.width = 32;
@@ -1661,6 +1749,7 @@ function pickPredicate(mesh) {
     return mesh.metadata?.type === "ore";
 }
 
+// tick function
 engine.runRenderLoop(() => {
     if (vars.PAUSED) return;
     FRAME_TIME = Math.min((performance.now() - LAST_FRAME) / 1000, 0.1); // cap frame time to prevent huge lag spikes
@@ -1668,7 +1757,7 @@ engine.runRenderLoop(() => {
     vars.FRAME_TIME = FRAME_TIME;
     
     document.getElementById("fps").textContent = `FPS: ${(1 / FRAME_TIME).toFixed(1)}`;
-
+    
     for (let i = 0; i < animatedCanvases.length; i++) {
         ores[animatedCanvases[i]].getCanvas();
         textures[animatedCanvases[i]]?.update();
@@ -1690,19 +1779,30 @@ engine.runRenderLoop(() => {
         generateAdjacent(r.x, r.y, r.z, { noUpdate: true });
     }
     vars.removalQueue.length = 0;
-
+    
     for (let i = 0; i < vars.spawnQueue.length; i++) {
         spawnOre(...vars.spawnQueue[i]); // why is this like my first time ever using spread syntax
     }
     vars.spawnQueue.length = 0;
-
+    
     for (let i = 0; i < vars.structureQueue.length; i++) {
         generateStructure(...vars.structureQueue[i]);
     }
     vars.structureQueue.length = 0;
     
+    const needingUpdate = Array.from(meshesNeedingUpdate);
+    for (let i = 0; i < needingUpdate.length; i++) {
+        /** @type {BABYLON.Mesh} */
+        const mesh = meshes[needingUpdate[i]];
+        const matrices = mesh.thinInstanceGetWorldMatrices();
+        if (matrices[0] !== undefined) mesh.thinInstanceSetMatrixAt(0, matrices[0]);
+        mesh.thinInstanceRefreshBoundingInfo();
+    }
+    
+    meshesNeedingUpdate.clear();
+    
     // movement
-    direction.z = Number(keys.forward) - Number(keys.backward);
+    direction.z = Number(keys.backward) - Number(keys.forward);
     direction.x = Number(keys.right) - Number(keys.left);
     direction.y = 0;
     
@@ -2103,7 +2203,7 @@ engine.runRenderLoop(() => {
             function updateLighting(area) {
                 scene.fogStart = 0;
                 // scene.fogEnd = area.fog || 1000;
-                scene.fogDensity = 0.5 / (Math.sqrt(area.fog || 100));
+                scene.fogDensity = 0.3 / (Math.sqrt(area.fog || 100));
                 perspectiveCamera.maxZ = area.fog || 1000;
                 vars.fogColor = area.fogColor || "#000000";
                 vars.nightFogColor = area.nightFogColor || vars.fogColor;
@@ -2181,6 +2281,8 @@ engine.runRenderLoop(() => {
             directionalLight.intensity = vars.directionalLightIntensity;
             sun.visibility = 1;
         }
+        
+        sunGlow.intensity = sun.visibility;
     } else {
         scene.fogColor = BABYLON.Color3.Lerp(getColor(vars.fogColor), getColor(nightFog), Math.min(Math.max((0.2 - sunHeight) / 0.4, 0), 1));
     }
@@ -2188,7 +2290,7 @@ engine.runRenderLoop(() => {
     directionalLight.position.copyFrom(offset.scale(1));
     directionalLight.setDirectionToTarget(BABYLON.Vector3.Zero());
     sun.position.copyFrom(perspectiveCamera.position).addInPlace(offset);
-
+    
     function hide() {
         document.getElementById("tooltip").style.display = "none";
         vars.miningStartTime = undefined;
@@ -2224,7 +2326,11 @@ engine.runRenderLoop(() => {
                 
                 let chance = m(x, y, z).chance ?? 0;
                 
-                if (MINING) miningTick();
+                if (MINING) {
+                    miningTick();
+                } else {
+                    document.getElementById("miningTime").innerText = "";
+                }
                 
                 document.getElementById("debugInfo").textContent = `${x}, ${y}, ${z}`;
                 if (document.getElementById("totalOres").style.display !== "none") {
@@ -2235,7 +2341,7 @@ engine.runRenderLoop(() => {
                 document.getElementById("oreRarity").style.display = "block";
                 
                 document.getElementById("oreDesc").textContent = oreData?.desc ?? "No description available.";
-                document.getElementById("miningTime").innerText = formatTime((m(x, y, z).str) / calculatePower(x, y, z) * (1 - (m(x, y, z).progress || 0))).replace("Infinity", "Unbreakable") + " + " + formatTime(inventory.currentPickaxe.delay);
+                // document.getElementById("miningTime").innerText = formatTime((m(x, y, z).str) / calculatePower(x, y, z) * (1 - (m(x, y, z).progress || 0))).replace("Infinity", "Unbreakable") + " + " + formatTime(inventory.currentPickaxe.delay);
             } else {
                 hide();
             }
@@ -2243,7 +2349,7 @@ engine.runRenderLoop(() => {
     } else {
         hide();
     }
-
+    
     // hp + radiation
     player.health += FRAME_TIME; // health regeneration
     let netChange = player.radiation + 0;
@@ -2274,7 +2380,7 @@ engine.runRenderLoop(() => {
     if (player.radiation > 0) {
         player.damage((player.radiation) * 0.08 * FRAME_TIME, 0, "radiation", true, false, false);
     } else player.radiation = 0;
-
+    
     if (player.health > 100) player.health = 100;
     if (player.health <= 0 || player.dead) {
         // die!!!

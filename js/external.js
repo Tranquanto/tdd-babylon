@@ -9,13 +9,13 @@ Math.lerp = function (a, b, t) {
  * Converts a number into a formatted string with number names for large values and increasing number of decimal places for small values.
  * @param {number} n Input value
  * @param {number} d Number of decimal places
- * @param {number} min Minimum value before the number is converted to its name
+ * @param {number} max Maximum value before the number is converted to its name
  * @param {string} format Locale
  * @returns {string} Formatted number string (e.g. "1,234,567,890" or "15.8Qi")
  */
-function formatNum(n, d = 2, min = 1e15, format) {
+function formatNum(n, d = 2, max = 1e15, format) {
     n = Number(n);
-    if (Math.abs(n) >= min) {
+    if (Math.abs(n) >= max) {
         const s = numberName(n, true, true, Math.max(d - (Math.floor(Math.log10(n)) % 3), 0));
         if (s.split(" ")[1]?.length === 1) return s.replace(" ", "");
         return s;

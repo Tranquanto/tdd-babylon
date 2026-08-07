@@ -2,6 +2,7 @@ import vars from "./vars.js";
 import { ores, layers, perLayerOreArray, getLayer } from "./content/items.js";
 import { rand01, heightMapNoise, heightMapNoiseLarge, heightMapMountain, heightMapMountainLarge, BIOME_INTERVAL } from "./perlin.js";
 import { isCave } from "./noise.js";
+import Color from "./color.js";
 
 export function checkAdjacent(x, y, z, func, includeCenter = false) {
     const positions = [[x - 1, y, z], [x + 1, y, z], [x, y - 1, z], [x, y + 1, z], [x, y, z - 1], [x, y, z + 1]];
@@ -417,6 +418,16 @@ export function calculatePower(x, y, z) {
     let pow = typeof inventory.currentPickaxe.power === "function" ? inventory.currentPickaxe.power(x, y, z) : inventory.currentPickaxe.power;
     // if (y < vars.player.maxSafeDepth) pow /= 1.05 ** (vars.player.maxSafeDepth - y);
     return pow;
+}
+
+export function getColor(input) {
+    try {
+        const color = new Color(input).toString({format: "hex", collapse: false});
+        return BABYLON.Color3.FromHexString(color);
+    } catch (e) {
+        console.error(`Invalid color: ${input} | ${e}`);
+        return new BABYLON.Color3(1, 1, 1);
+    }
 }
 
 document.getElementById("version").innerText = `Version ${vars.version}`;

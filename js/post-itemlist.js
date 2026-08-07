@@ -161,7 +161,224 @@ ores.purplePillar.onGenerate = (x, y, z, settings) => {
     generateTower(x, y, z, settings, "purplePillar");
 }
 
-/* ores.blackHole.onGenerate = (x, y, z) => {
+/*
+ores.antimatter.tick = (x, y, z) => {
+    const size = Math.random() * 24 + 12;
+    const geometry = new THREE.PlaneGeometry(size, size);
+    const material = new THREE.MeshBasicMaterial({
+        color: 0xffffff,
+        side: THREE.DoubleSide,
+        map: vars.textures.ring,
+        transparent: true,
+        opacity: 0,
+        depthWrite: false
+    });
+    const mesh = new THREE.Mesh(geometry, material);
+    mesh.frustumCulled = false;
+    mesh.position.set(x, y, z);
+    mesh.renderOrder = 99;
+    mesh.rotation.set(Math.random() * Math.PI * 2, Math.random() * Math.PI * 2, Math.random() * Math.PI * 2);
+    mesh.userData.active = true;
+    mesh.userData.speed = Math.random() * 0.01 + 0.03;
+    vars.scene.add(mesh);
+    setTimeout(() => {
+        mesh.userData.active = false;
+        vars.scene.remove(mesh);
+    }, 2000);
+    function meshTick() {
+        if (!mesh.userData.active) return;
+        requestAnimationFrame(meshTick);
+        if (vars.PAUSED) return;
+        mesh.rotation.z += mesh.userData.speed;
+        mesh.material.opacity = Math.min(1, mesh.material.opacity + 0.003);
+        geometry.scale(0.95, 0.95, 0.95);
+        if (m(x, y, z).ore !== "antimatter") vars.scene.remove(mesh);
+    }
+    meshTick();
+    const dist = vars.perspectiveCamera.position.distanceTo(new THREE.Vector3(x, y, z));
+    vars.camera.shakeIntensity = Math.max(0, 2 / (dist + 2) - (dist / 50));
+}
+
+ores.antimatter.onRemove = (x, y, z) => {
+    if (!m(x, y, z).placed) {
+        // destroy a giant sphere of ores around it with a 12 block radius
+        for (let dx = -12; dx <= 12; dx++) {
+            for (let dy = -12; dy <= 12; dy++) {
+                for (let dz = -12; dz <= 12; dz++) {
+                    const dist = Math.sqrt(dx * dx + dy * dy + dz * dz);
+                    if (dist <= 12) {
+                        vars.removalQueue.push({x: x + dx, y: y + dy, z: z + dz, forced: true});
+                    }
+                }
+            }
+        }
+        
+        const explosionGeometry = new THREE.SphereGeometry(0.5, 16, 16);
+        const explosionMaterial = new THREE.MeshLambertMaterial({
+            color: 0xffffff,
+            transparent: true,
+            opacity: 0.8,
+            depthWrite: false,
+            emissive: 0xffffff,
+            emissiveIntensity: 20
+        });
+        const explosion = new THREE.Mesh(explosionGeometry, explosionMaterial);
+        explosion.position.set(x, y, z);
+        explosion.renderOrder = 99;
+        vars.scene.add(explosion);
+        
+        const light = {
+            position: explosion.position,
+            color: new THREE.Color(0xffffff),
+            intensity: 150,
+            decay: 0.1
+        }
+        
+        vars.lightArr.push(light);
+        
+        const explosionTick = () => {
+            if (explosion.userData.inactive) return;
+            requestAnimationFrame(explosionTick);
+            if (vars.PAUSED) return;
+            explosion.scale.addScalar(0.2 * vars.FRAME_TIME * 60);
+            explosion.material.opacity *= 0.9 ** (vars.FRAME_TIME * 60);
+            
+            if (explosion.material.opacity > 0.5) {
+                explosion.material.color = new THREE.Color(0xffffff).lerp(new THREE.Color(0xffff00), 2 - explosion.material.opacity / 0.5);
+            } else if (explosion.material.opacity > 0.1) {
+                explosion.material.color = new THREE.Color(0xffff00).lerp(new THREE.Color(0xff0000), 1.25 - explosion.material.opacity / 0.4);
+            } else {
+                explosion.material.color = new THREE.Color(0xff0000).lerp(new THREE.Color(0x444444), 1 - explosion.material.opacity / 0.1);
+            }
+            explosion.material.emissive = light.color = explosion.material.color;
+            
+            light.intensity *= 0.9 ** (vars.FRAME_TIME * 60);
+            light.needsUpdate = true;
+        }
+        explosionTick();
+        setTimeout(() => {
+            explosion.userData.inactive = true;
+            vars.scene.remove(explosion);
+            
+            const lightIndex = vars.lightArr.indexOf(light);
+            if (lightIndex !== -1) {
+                vars.lightArr.splice(lightIndex, 1);
+            }
+        }, 3000);
+        
+        const audio = new Audio("audio/sfx/explosion.mp3");
+        audio.volume = 0.5;
+        audio.play();
+        vars.camera.shake(0.5, 2000);
+    } else {
+        vars.camera.shakeIntensity = 0;
+    }
+}
+
+ores.alaphite.onGenerate = (x, y, z) => {
+    const sphere = new THREE.SphereGeometry(0.3, 16, 16);
+    const material = new THREE.MeshStandardMaterial({
+        color: 0xffff00,
+        emissive: 0xffff00,
+        emissiveIntensity: 1.5
+    });
+    const mesh = new THREE.Mesh(sphere, material);
+    mesh.position.set(x, y, z);
+    mesh.userData.originalPos = new THREE.Vector3(x, y, z);
+    const rand = Math.random() * Math.PI * 2;
+    const x1 = Math.cos(rand);
+    const z1 = Math.sin(rand);
+    const vector = new THREE.Vector3(x1, 0, z1).multiplyScalar(1.5);
+    
+    const axialTilt = Math.random() * Math.PI * 2;
+    vector.applyAxisAngle(new THREE.Vector3(1, 0, 0), axialTilt);
+    
+    mesh.position.add(vector);
+    mesh.userData.angle = rand;
+    mesh.name = `alaphite-sphere-${x}-${y}-${z}`;
+    mesh.userData.active = true;
+    vars.scene.add(mesh);
+    
+    const speed = Math.random() * 0.06 + 0.04;
+    
+    const g = new THREE.PlaneGeometry(3.8, 3.8);
+    const swirlMat = new THREE.MeshStandardMaterial({
+        color: 0xffff00,
+        side: THREE.DoubleSide,
+        map: vars.textures.swirl,
+        transparent: true,
+        depthWrite: false,
+        emissive: 0xffff00,
+        emissiveIntensity: 1
+    });
+    const swirl = new THREE.Mesh(g, swirlMat);
+    swirl.position.set(x, y, z);
+    swirl.name = `alaphite-swirl-${x}-${y}-${z}`;
+    swirl.renderOrder = 99;
+    vars.scene.add(swirl);
+    
+    function meshTick() {
+        if (mesh.userData.active) {
+            requestAnimationFrame(meshTick);
+            if (vars.PAUSED) return;
+            mesh.userData.angle += speed * vars.FRAME_TIME * 60;
+            const x1 = Math.cos(mesh.userData.angle);
+            const z1 = Math.sin(mesh.userData.angle);
+            vector.set(x1, 0, z1);
+            vector.applyAxisAngle(new THREE.Vector3(1, 0, 0), axialTilt).multiplyScalar(1.5);
+            mesh.position.set(
+                mesh.userData.originalPos.x + vector.x,
+                mesh.userData.originalPos.y + vector.y,
+                mesh.userData.originalPos.z + vector.z
+            );
+            if (m(x, y, z).ore !== "alaphite") {
+                mesh.userData.active = false;
+                vars.scene.remove(mesh);
+            }
+        }
+        if (swirl.userData) {
+            swirl.rotation.set(axialTilt - Math.PI / 2, 0, -mesh.userData.angle);
+        }
+        
+        let a = -1;
+        const col = Math.random() * 2 - 1;
+        const sparkleColor = new THREE.Color("#ff0").lerp(new THREE.Color("#fff"), col < 0 ? 0 : col).lerp(new THREE.Color("#0ff"), col > 0 ? 0 : -col);
+        
+        vars.particleQueue.push({
+            x: x + Math.random() * 3 - 1.5,
+            y: y + Math.random() * 3 - 1.5,
+            z: z + Math.random() * 3 - 1.5,
+            size: Math.random() * 0.2 + 0.1,
+            texture: "sparkle" + ~~(Math.random() * 5),
+            velocity: {
+                x: (Math.random() - 0.5) / 30,
+                y: (Math.random() - 0.5) / 30,
+                z: (Math.random() - 0.5) / 30
+            },
+            opacity: 1,
+            color: sparkleColor,
+            tick(particle, FRAME_TIME) {
+                a += 0.01 * FRAME_TIME * 60;
+                particle.points.material.opacity = 1 - Math.abs(a);
+                if (particle.points.material.opacity < 0 || !mesh.userData.active) return true;
+            }
+        });
+    }
+    meshTick();
+}
+
+ores.alaphite.onRemove = (x, y, z) {
+    const mesh = vars.scene.getObjectByName(`alaphite-sphere-${x}-${y}-${z}`);
+    if (mesh) {
+        vars.scene.remove(mesh);
+    }
+    const swirl = vars.scene.getObjectByName(`alaphite-swirl-${x}-${y}-${z}`);
+    if (swirl) {
+        vars.scene.remove(swirl);
+    }
+}
+
+ores.blackHole.onGenerate = (x, y, z) => {
     function addCylinder() {
         const geometry = new THREE.CylinderGeometry(0.06, 0.06, 32);
         const material = new THREE.MeshBasicMaterial({
@@ -177,7 +394,7 @@ ores.purplePillar.onGenerate = (x, y, z, settings) => {
         mesh.renderOrder = 99;
         vars.scene.add(mesh);
     }
-    
+
     function addAccretionDisc() {
         const g = new THREE.PlaneGeometry(4, 4);
         const material = new THREE.MeshBasicMaterial({
@@ -249,6 +466,107 @@ ores.blackHole.onRemove = (x, y, z) => {
     }
     if (mesh2) {
         vars.scene.remove(mesh2);
+    }
+}
+
+ores.exoticMatter.onGenerate = (x, y, z) => {
+    const geometry = new THREE.IcosahedronGeometry(0.5, 0);
+    const material = new THREE.MeshBasicMaterial({
+        color: 0xffffff
+    });
+    const mesh = new THREE.InstancedMesh(geometry, material, 48);
+    mesh.renderOrder = 99;
+    mesh.position.set(x, y, z);
+    mesh.name = `exoticMatter-${x}-${y}-${z}`;
+    mesh.userData.active = true;
+    
+    for (let i = 0; i < mesh.count; i++) {
+        const dummy = new THREE.Object3D();
+        dummy.position.set(Math.random() - 0.5, Math.random() - 0.5, Math.random() - 0.5).normalize().multiplyScalar(Math.random() * 0.5);
+        dummy.rotation.set(Math.random() * Math.PI, Math.random() * Math.PI, Math.random() * Math.PI);
+        dummy.updateMatrix();
+        mesh.setMatrixAt(i, dummy.matrix);
+        mesh.setColorAt(i, new THREE.Color(Math.random() * 0xffffff));
+    }
+    
+    vars.scene.add(mesh);
+    
+    for (let i = 0; i < 16; i++) {
+        // const oreID = oreArray.filter(o => o.singleLayer && !o.noTexture && !o.customTexture)[Math.floor(Math.random() * oreArray.filter(o => o.singleLayer && !o.noTexture && !o.customTexture).length)].id;
+        const oreID = Object.keys(vars.textures)[Math.floor(Math.random() * Object.keys(vars.textures).length)];
+        const oreGeo = new THREE.BoxGeometry(0.6, 0.6, 0.6);
+        const oreMat = new THREE.MeshLambertMaterial({
+            color: 0xffffff,
+            map: vars.textures[oreID],
+            transparent: true
+        });
+        const bg = new THREE.MeshLambertMaterial({
+            map: vars.textures.shale
+        });
+        oreGeo.clearGroups();
+        oreGeo.addGroup(0, Infinity, 0);
+        oreGeo.addGroup(0, Infinity, 1);
+        const oreMesh = new THREE.InstancedMesh(oreGeo, [bg, oreMat], 6 * i);
+        oreMesh.userData.tilt = {x: Math.random() * Math.PI, y: Math.random() * Math.PI, z: Math.random() * Math.PI};
+        oreMesh.userData.rotations = Array(oreMesh.count).fill().map((_, idx) => Math.PI / 3 * idx / i);
+        oreMesh.userData.rotationSpeeds = Array(oreMesh.count).fill().map(() => ({x: (Math.random() - 0.5) * 0.02, y: (Math.random() - 0.5) * 0.02, z: (Math.random() - 0.5) * 0.02}));
+        oreMesh.position.set(x, y, z);
+        
+        oreMesh.name = `exoticMatter-ore-${x}-${y}-${z}-${i}`;
+        vars.scene.add(oreMesh);
+    }
+}
+ores.exoticMatter.onRemove = (x, y, z) => {
+    const mesh = vars.scene.getObjectByName(`exoticMatter-${x}-${y}-${z}`);
+    if (mesh) vars.scene.remove(mesh);
+    for (let i = 0; i < 16; i++) {
+        const oreMesh = vars.scene.getObjectByName(`exoticMatter-ore-${x}-${y}-${z}-${i}`);
+        if (oreMesh) vars.scene.remove(oreMesh);
+    }
+}
+ores.exoticMatter.tick = (x, y, z) => {
+    const mesh = vars.scene.getObjectByName(`exoticMatter-${x}-${y}-${z}`);
+    if (mesh && mesh.userData.active) {
+        // randomize positions and rotations
+        for (let i = 0; i < mesh.count; i++) {
+            const dummy = new THREE.Object3D();
+            mesh.getMatrixAt(i, dummy.matrix);
+            dummy.position.set(Math.random() - 0.5, Math.random() - 0.5, Math.random() - 0.5).normalize().multiplyScalar(Math.random() * 0.5);
+            dummy.rotation.set(Math.random() * Math.PI, Math.random() * Math.PI, Math.random() * Math.PI);
+            dummy.updateMatrix();
+            mesh.setMatrixAt(i, dummy.matrix);
+            mesh.setColorAt(i, new THREE.Color(Math.random() * 0xffffff));
+        }
+        
+        mesh.instanceMatrix.needsUpdate = true;
+        mesh.instanceColor.needsUpdate = true;
+        mesh.computeBoundingBox();
+        mesh.computeBoundingSphere();
+    }
+    
+    for (let i = 0; i < 16; i++) {
+        const oreMesh = vars.scene.getObjectByName(`exoticMatter-ore-${x}-${y}-${z}-${i}`);
+        if (oreMesh) {
+            for (let j = 0; j < oreMesh.count; j++) {
+                const dummy = new THREE.Object3D();
+                oreMesh.getMatrixAt(j, dummy.matrix);
+                const tilt = oreMesh.userData.tilt;
+                oreMesh.userData.rotations[j] += 0.3 * vars.FRAME_TIME * 60 / i ** 2;
+                dummy.position.set(i * 2, 0, 0)
+                .applyAxisAngle(new THREE.Vector3(0, 1, 0), oreMesh.userData.rotations[j])
+                .applyAxisAngle(new THREE.Vector3(1, 0, 0), tilt.x)
+                .applyAxisAngle(new THREE.Vector3(0, 1, 0), tilt.y)
+                .applyAxisAngle(new THREE.Vector3(0, 0, 1), tilt.z);
+                
+                dummy.rotation.set(oreMesh.userData.rotations[j], oreMesh.userData.rotations[j], oreMesh.userData.rotations[j]);
+                
+                dummy.updateMatrix();
+                oreMesh.setMatrixAt(j, dummy.matrix);
+            }
+            oreMesh.instanceMatrix.needsUpdate = true;
+            oreMesh.computeBoundingBox();
+            oreMesh.computeBoundingSphere();
+        }
     }
 } */
 

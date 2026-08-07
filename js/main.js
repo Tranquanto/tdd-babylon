@@ -1,7 +1,5 @@
-import Color from "./color.js";
-
 import vars from "./vars.js";
-import { getOre, m, oreAt, checkAdjacent, calculatePower, airAt, calculateRarity, chunks, getBGOre } from "./outside_stuff.js";
+import { getOre, m, oreAt, checkAdjacent, calculatePower, airAt, calculateRarity, chunks, getBGOre, getColor } from "./outside_stuff.js";
 import { getLayer, items, layers, locations, oreArray, ores, structureArray, structures, tiers, traits } from "./content/items.js";
 import { biomes, topLayer } from "./content/layers.js";
 import { isCave, CHUNK3_RATE, CHUNK_SIZE_3, CHUNK_SIZE, noise, isCaveFloor, isCaveCeiling } from "./noise.js";
@@ -10,7 +8,7 @@ import { rand01 } from "./perlin.js";
 
 const { player, stats, camera } = vars;
 
-const canvas = document.getElementById("canvas");
+const canvas = getElementById("canvas");
 
 const textures = {}, animatedCanvases = [];
 const meshes = {}, meshesNeedingUpdate = new Set();
@@ -152,54 +150,54 @@ document.addEventListener("keydown", event => {
         toggleInventory();
         break;
         case 'Escape':
-        if (document.getElementById("ore-wiki").style.display === "block") {
-            document.getElementById("ore-wiki").style.display = "none";
-        } else if (document.getElementById("big-gui").style.display === "block") {
-            document.getElementById("big-gui").style.display = "none";
-            document.getElementById("big-gui").style.width = "";
-        } else if (document.getElementById("large-inventory").style.display === "block") {
-            document.getElementById("large-inventory").style.display = "none";
-        } else if (document.getElementById("indexes").style.display === "block") {
-            document.getElementById("indexes").style.display = "none";
-        } else if (document.getElementById("ore-wiki-list").style.display === "block") {
-            document.getElementById("ore-wiki-list").style.display = "none";
-        } else if (document.getElementById("item-wiki-list").style.display === "block") {
-            document.getElementById("item-wiki-list").style.display = "none";
-        } else if (document.getElementById("layer-wiki-list").style.display === "block") {
-            document.getElementById("layer-wiki-list").style.display = "none";
-        } else if (document.getElementById("biome-wiki-list").style.display === "block") {
-            document.getElementById("biome-wiki-list").style.display = "none";
-        } else if (document.getElementById("achievements-list").style.display === "block") {
-            document.getElementById("achievements-list").style.display = "none";
-        } else if (document.getElementById("equip-text").style.display === "") {
-            document.getElementById("equip-text").style.display = "none";
-            document.getElementById("large-inventory").style.display = "block";
-            document.getElementById("hotbar").classList.remove("big");
+        if (getElementById("ore-wiki").style.display === "block") {
+            getElementById("ore-wiki").style.display = "none";
+        } else if (getElementById("big-gui").style.display === "block") {
+            getElementById("big-gui").style.display = "none";
+            getElementById("big-gui").style.width = "";
+        } else if (getElementById("large-inventory").style.display === "block") {
+            getElementById("large-inventory").style.display = "none";
+        } else if (getElementById("indexes").style.display === "block") {
+            getElementById("indexes").style.display = "none";
+        } else if (getElementById("ore-wiki-list").style.display === "block") {
+            getElementById("ore-wiki-list").style.display = "none";
+        } else if (getElementById("item-wiki-list").style.display === "block") {
+            getElementById("item-wiki-list").style.display = "none";
+        } else if (getElementById("layer-wiki-list").style.display === "block") {
+            getElementById("layer-wiki-list").style.display = "none";
+        } else if (getElementById("biome-wiki-list").style.display === "block") {
+            getElementById("biome-wiki-list").style.display = "none";
+        } else if (getElementById("achievements-list").style.display === "block") {
+            getElementById("achievements-list").style.display = "none";
+        } else if (getElementById("equip-text").style.display === "") {
+            getElementById("equip-text").style.display = "none";
+            getElementById("large-inventory").style.display = "block";
+            getElementById("hotbar").classList.remove("big");
             inventory.SELECTED_ITEM = null;
-        } else if (document.getElementById("main-menu").style.display === "none" && document.getElementById("settings-menu").style.display === "none" && document.getElementById("play-menu").style.display === "none") {
+        } else if (getElementById("main-menu").style.display === "none" && getElementById("settings-menu").style.display === "none" && getElementById("play-menu").style.display === "none") {
             pause();
-        } else if (STARTED && document.getElementById("menu-mask").style.display === "none") {
-            document.getElementById("main-menu").style.display = "none";
-            document.getElementById("logo-container").style.visibility = "hidden";
-            document.getElementById("settings-menu").style.display = "none";
-            document.getElementById("play-menu").style.display = "none";
-            document.getElementById("bgm").play();
+        } else if (STARTED && getElementById("menu-mask").style.display === "none") {
+            getElementById("main-menu").style.display = "none";
+            getElementById("logo-container").style.visibility = "hidden";
+            getElementById("settings-menu").style.display = "none";
+            getElementById("play-menu").style.display = "none";
+            getElementById("bgm").play();
             vars.PAUSED = false;
             vars.hasPlayed = true;
         }
-        document.getElementById("logo").style.animationDuration = "0s";
-        document.getElementById("menu-mask").style.animationDuration = "0s";
-        document.getElementById("logo").style.animationDelay = "0s";
-        document.getElementById("menu-mask").style.display = "none";
+        getElementById("logo").style.animationDuration = "0s";
+        getElementById("menu-mask").style.animationDuration = "0s";
+        getElementById("logo").style.animationDelay = "0s";
+        getElementById("menu-mask").style.display = "none";
         break;
         case 'F1':
         event.preventDefault();
         if (GUI_HIDDEN) {
             GUI_HIDDEN = false;
-            document.getElementById("ui").style.visibility = "visible";
+            getElementById("ui").style.visibility = "visible";
         } else {
             GUI_HIDDEN = true;
-            document.getElementById("ui").style.visibility = "hidden";
+            getElementById("ui").style.visibility = "hidden";
         }
         break;
         case 'F2':
@@ -209,10 +207,10 @@ document.addEventListener("keydown", event => {
         break;
         case 'F3':
         event.preventDefault();
-        if (document.getElementById("totalOres").style.display === "none") {
-            document.getElementById("totalOres").style.display = "block";
+        if (getElementById("totalOres").style.display === "none") {
+            getElementById("totalOres").style.display = "block";
         } else {
-            document.getElementById("totalOres").style.display = "none";
+            getElementById("totalOres").style.display = "none";
         }
         break;
         case 'F4':
@@ -282,8 +280,8 @@ document.addEventListener("mouseup", e => {
     }
     
     vars.miningStartTime = undefined;
-    document.getElementById("mining-progress").style.display = "none";
-    document.getElementById("miningTime").style.display = "none";
+    getElementById("mining-progress").style.display = "none";
+    getElementById("miningTime").style.display = "none";
     MINING = false;
     CURRENT_ORE = [];
 });
@@ -295,7 +293,7 @@ workers.findEmpty.addEventListener("message", e => {
 });
 workers.findEmpty.postMessage({seed: vars.seed});
 
-document.getElementById("bgm").volume = 0.25;
+getElementById("bgm").volume = 0.25;
 
 scene.ambientColor = new BABYLON.Color3(0.01, 0.01, 0.01);
 
@@ -436,16 +434,6 @@ export function teleport(x, y, z) {
 player.teleport = teleport;
 window.teleport = teleport;
 
-function getColor(input) {
-    try {
-        const color = new Color(input).toString({format: "hex", collapse: false});
-        return BABYLON.Color3.FromHexString(color);
-    } catch (e) {
-        console.error(`Invalid color: ${input} | ${e}`);
-        return new BABYLON.Color3(1, 1, 1);
-    }
-}
-
 function getTexture(ore, face, type) {
     if (ores[ore]?.noTexture) return null;
     const id = ore;
@@ -472,6 +460,8 @@ function getTexture(ore, face, type) {
 export async function generateOre(x, y, z, ore, bg, settings) {
     if (!ores[ore]) return;
     x = Math.round(x), y = Math.round(y), z = Math.round(z);
+
+    if (ores[ore].singleLayer) bg = ore;
     
     if (ores[ore] && ores[ore].placeholder) {
         if (ores[ore].onGenerate) ores[ore].onGenerate(x, y, z, settings, m(x, y, z));
@@ -572,7 +562,7 @@ export async function generateOre(x, y, z, ore, bg, settings) {
             oreMaterial.useVertexColors = true;
             oreMaterial.baseColor = oreMaterial.diffuseColor = new BABYLON.Color3(1, 1, 1);
             oreMaterial.ambientColor = new BABYLON.Color3(1, 1, 1);
-            oreMaterial.specularColor = new BABYLON.Color3(0.5, 0.5, 0.5);
+            oreMaterial.specularColor = ore === bg || ores[ore]?.singleLayer ? new BABYLON.Color3(0.5, 0.5, 0.5) : new BABYLON.Color3(0, 0, 0);
             oreMaterial.alphaMode = 2;
             
             oreMaterial.roughness = 1;
@@ -709,11 +699,11 @@ export async function generateOre(x, y, z, ore, bg, settings) {
         .multiply(BABYLON.Matrix.Translation(settings.offset.x, settings.offset.y, settings.offset.z))
         .multiply(BABYLON.Matrix.RotationYawPitchRoll(settings.rotation.y, settings.rotation.x, settings.rotation.z))
         .multiply(BABYLON.Matrix.Translation(x - chunkSplit[0], y - chunkSplit[1], z - chunkSplit[2]));
-        meshes[`${meshID}_${count}`].thinInstanceAdd(matrix);
+        meshes[`${meshID}_${count}`].thinInstanceAdd(matrix, settings.forceUpdate);
         const index = meshes[`${meshID}_${count}`].thinInstanceCount - 1;
         meshes[`${meshID}_${count}`].metadata.coords[index] = {x, y, z};
         
-        // meshesNeedingUpdate.add(`${meshID}_${count}`);
+        meshesNeedingUpdate.add(`${meshID}_${count}`);
         
         /** @type {BABYLON.Mesh} */
         const mesh = meshes[`${meshID}_${count}`];
@@ -751,6 +741,10 @@ export async function generateOre(x, y, z, ore, bg, settings) {
         index: USE_THIN_INSTANCES ? meshes[`${meshID}_${count}`].thinInstanceCount - 1 : undefined
     });
     totalOres++;
+
+    if (ores[ore].textureHasTransparency && !ores[ore].allowTransparent || ores[ore].forceAdjacent) {
+        generateAdjacent(x, y, z, { noCave: settings.noCave, caveExclusive: settings.caveExclusive });
+    }
     
     // if ore light
     if (ores[ore]?.light) {
@@ -831,7 +825,7 @@ function removeOre(x, y, z, settings = {}) {
                     if (mesh._thinInstanceDataStorage) {
                         mesh._thinInstanceDataStorage.worldMatrices = null;
                     }
-                    mesh.thinInstanceRefreshBoundingInfo();
+                    meshesNeedingUpdate.add(meshID);
                     
                     // remove any audio and light associated with this ore
                     /* const audio = scene.getObjectByName(`audio-${x}-${y}-${z}`);
@@ -887,7 +881,7 @@ function removeOre(x, y, z, settings = {}) {
                     // check for overlay as well
                     const overlayIndex = vars.overlays.findIndex(g => Math.round(g.x) === Math.round(x) && Math.round(g.y) === Math.round(y) && Math.round(g.z) === Math.round(z));
                     if (overlayIndex !== -1) {
-                        document.getElementById(vars.overlays[overlayIndex].ore + "Overlay").style.opacity = 0;
+                        getElementById(vars.overlays[overlayIndex].ore + "Overlay").style.opacity = 0;
                         vars.overlays.splice(overlayIndex, 1);
                     }
                 }
@@ -1428,8 +1422,8 @@ function loadNearbyChunks() {
 
 function miningTick() {
     let updatedBreak = false;
-    document.getElementById("miningTime").style.display = "block";
-    document.getElementById("mining-progress").style.display = "block";
+    getElementById("miningTime").style.display = "block";
+    getElementById("mining-progress").style.display = "block";
     
     const intersect = LAST_ORE[4];
     const oldIntersect = CURRENT_ORE[4];
@@ -1448,8 +1442,9 @@ function miningTick() {
     }
 
     if (!(vars.miningStartTime < performance.now())) {
-        document.getElementById("miningTime").innerText = formatTime((m(x, y, z).str) / calculatePower(x, y, z) * (1 - (m(x, y, z).progress || 0))).replace("Infinity", "Unbreakable") + " + " + ((vars.miningStartTime - performance.now()) / 1000).toFixed(2) + " sec";
-        document.getElementById("miningTime").style.color = "#ff0";
+        getElementById("miningTime").innerText = formatTime((m(x, y, z).str) / calculatePower(x, y, z) * (1 - (m(x, y, z).progress || 0))).replace("Infinity", "Unbreakable") + " + " + ((vars.miningStartTime - performance.now()) / 1000).toFixed(2) + " sec";
+        getElementById("miningTime").style.color = "#ff0";
+        getElementById("mining-progress").value = (m(x, y, z).progress || 0) * 100;
     }
     
     CURRENT_ORE = LAST_ORE;
@@ -1467,11 +1462,11 @@ function miningTick() {
     if (progress >= 100) {
         mine(x, y, z);
     } else if (vars.miningStartTime < performance.now()) {
-        document.getElementById("miningTime").innerText = formatTime((m(x, y, z).str) / calculatePower(x, y, z) * (1 - progress / 100)).replace("Infinity", "Unbreakable");
-        document.getElementById("miningTime").style.color = "#fff";
-        document.getElementById("mining-progress").value = progress;
-        document.getElementById("mining-progress").style.setProperty("--color", (m(x, y, z).color || m(x, y, z).ore ? ores[m(x, y, z).ore].color : "#888") || "#888");
-        document.getElementById("mining-progress").style.setProperty("--size", document.getElementById("mining-progress").offsetWidth + "px");
+        getElementById("miningTime").innerText = formatTime((m(x, y, z).str) / calculatePower(x, y, z) * (1 - progress / 100)).replace("Infinity", "Unbreakable");
+        getElementById("miningTime").style.color = "#fff";
+        getElementById("mining-progress").value = progress;
+        getElementById("mining-progress").style.setProperty("--color", (m(x, y, z).color || m(x, y, z).ore ? ores[m(x, y, z).ore].color : "#888") || "#888");
+        getElementById("mining-progress").style.setProperty("--size", getElementById("mining-progress").offsetWidth + "px");
     }
 }
 
@@ -1498,21 +1493,21 @@ function updateBreakMesh() {
 }
 
 function updateTopLeft() {
-    document.getElementById("health").value = player.health;
-    document.getElementById("radiation").value = Math.max(Math.log2(player.radiation + 1), 0);
-    document.getElementById("healthText").innerText = `${formatNum(player.health, 2)} HP`;
-    document.getElementById("radiationText").innerText = `${formatNum(player.radiation, 3)} Rads`;
+    getElementById("health").value = player.health;
+    getElementById("radiation").value = Math.max(Math.log2(player.radiation + 1), 0);
+    getElementById("healthText").innerText = `${formatNum(player.health, 2)} HP`;
+    getElementById("radiationText").innerText = `${formatNum(player.radiation, 3)} Rads`;
     if (player.radiation > 12.5) {
-        document.getElementById("radiation").classList.add("danger");
+        getElementById("radiation").classList.add("danger");
     } else {
-        document.getElementById("radiation").classList.remove("danger");
+        getElementById("radiation").classList.remove("danger");
     }
-    document.getElementById("depth").innerText = `${player.position.y < 0 ? "Depth" : "Altitude"}: ${Math.abs(player.position.y).toLocaleString(undefined, {maximumFractionDigits: 1})}m (${layers[CURRENT_LAYER] ? layers[CURRENT_LAYER].name : biomes[CURRENT_LAYER] ? biomes[CURRENT_LAYER].name : "Unknown"})`;
-    document.getElementById("position").innerText = `Position: ${player.position.x.toLocaleString(undefined, {maximumFractionDigits: 1})}, ${(player.position.y).toLocaleString(undefined, {maximumFractionDigits: 1})}, ${player.position.z.toLocaleString(undefined, {maximumFractionDigits: 1}) === "-0" ? "0" : player.position.z.toLocaleString(undefined, {maximumFractionDigits: 1})}`.replaceAll("-0,", "0,");
-    document.getElementById("power").innerText = `Pickaxe Power: ${formatNum(1 / (Math.abs(player.position.y) + 1000) * 1000 * calculatePower(player.position.x, player.position.y, player.position.z))}`;
-    document.getElementById("time").innerText = `Time: ${getTimeString()}`;
+    getElementById("depth").innerText = `${player.position.y < 0 ? "Depth" : "Altitude"}: ${Math.abs(player.position.y).toLocaleString(undefined, {maximumFractionDigits: 1})}m (${layers[CURRENT_LAYER] ? layers[CURRENT_LAYER].name : biomes[CURRENT_LAYER] ? biomes[CURRENT_LAYER].name : "Unknown"})`;
+    getElementById("position").innerText = `Position: ${player.position.x.toLocaleString(undefined, {maximumFractionDigits: 1})}, ${(player.position.y).toLocaleString(undefined, {maximumFractionDigits: 1})}, ${player.position.z.toLocaleString(undefined, {maximumFractionDigits: 1}) === "-0" ? "0" : player.position.z.toLocaleString(undefined, {maximumFractionDigits: 1})}`.replaceAll("-0,", "0,");
+    getElementById("power").innerText = `Pickaxe Power: ${formatNum(1 / (Math.abs(player.position.y) + 1000) * 1000 * calculatePower(player.position.x, player.position.y, player.position.z))}`;
+    getElementById("time").innerText = `Time: ${getTimeString()}`;
     
-    document.getElementById("totalOres").innerText = `Ores: ${totalOres.toLocaleString()}
+    getElementById("totalOres").innerText = `Ores: ${totalOres.toLocaleString()}
     Meshes: ${Object.keys(meshes).length.toLocaleString()}
     Lights: ${lightArr.length.toLocaleString()} | ${scene.lights.length}
     Generating Chunks: ${generatingChunks.length.toLocaleString()}, ${generatingChunks3.length.toLocaleString()}
@@ -1523,7 +1518,7 @@ function updateTopLeft() {
 function mine(x, y, z, settings = {}) {
     if (airAt(x, y, z)) return;
     
-    document.getElementById("mining-progress").value = 0;
+    getElementById("mining-progress").value = 0;
     const ore = m(x, y, z).ore;
     if (!ores[ore]) console.log(ore, x, y, z, m(x, y, z));
     const dropCount = vars.itemMultiplier * Math.round(m(x, y, z).yield || 1);
@@ -1580,7 +1575,7 @@ function mine(x, y, z, settings = {}) {
     
     if (ores[ore].onBreak) ores[ore].onBreak(x, y, z, inventory);
     removeOre(x, y, z);
-    generateAdjacent(x, y, z);
+    generateAdjacent(x, y, z, {forceUpdate: true});
     
     if (!settings.noExplosion && inventory.currentPickaxe.explosion) {
         const radius = inventory.currentPickaxe.explosion.radius || 1;
@@ -1679,11 +1674,11 @@ function useSelectedItem() {
             if (!player.nightVision) {
                 cameraLight.diffuse = ambientLight.color;
                 cameraLight.intensity = ambientLight.intensity * 6;
-                document.getElementById("nightVisionOverlay").style.display = "none";
+                getElementById("nightVisionOverlay").style.display = "none";
             } else {
                 cameraLight.diffuse = BABYLON.Color3.FromHexString("#91eb36");
                 cameraLight.intensity = 5;
-                document.getElementById("nightVisionOverlay").style.display = "block";
+                getElementById("nightVisionOverlay").style.display = "block";
             }
         }
         return true;
@@ -1719,12 +1714,12 @@ function start() {
     // start logo css animation
     function startAnimations() {
         setTimeout(() => {
-            document.getElementById("logo").style.display = "";
-            document.getElementById("logo").style.animation = "initLogo 4s ease-in-out";
-            document.getElementById("logo").style.animationFillMode = "forwards";
+            getElementById("logo").style.display = "";
+            getElementById("logo").style.animation = "initLogo 4s ease-in-out";
+            getElementById("logo").style.animationFillMode = "forwards";
             setTimeout(() => {
-                document.getElementById("menu-mask").style.animation = "initMask 2.4s ease-in-out";
-                document.getElementById("menu-mask").style.animationFillMode = "forwards";
+                getElementById("menu-mask").style.animation = "initMask 2.4s ease-in-out";
+                getElementById("menu-mask").style.animationFillMode = "forwards";
             }, 1600);
         }, 0);
     }
@@ -1734,9 +1729,9 @@ start();
 
 function pause() {
     vars.PAUSED = true;
-    document.getElementById("logo-container").style.visibility = "visible";
-    document.getElementById("main-menu").style.display = "block";
-    document.getElementById("bgm").pause();
+    getElementById("logo-container").style.visibility = "visible";
+    getElementById("main-menu").style.display = "block";
+    getElementById("bgm").pause();
 }
 
 let direction = new BABYLON.Vector3();
@@ -1756,7 +1751,7 @@ engine.runRenderLoop(() => {
     LAST_FRAME = performance.now();
     vars.FRAME_TIME = FRAME_TIME;
     
-    document.getElementById("fps").textContent = `FPS: ${(1 / FRAME_TIME).toFixed(1)}`;
+    getElementById("fps").textContent = `FPS: ${(1 / FRAME_TIME).toFixed(1)}`;
     
     for (let i = 0; i < animatedCanvases.length; i++) {
         ores[animatedCanvases[i]].getCanvas();
@@ -1796,7 +1791,6 @@ engine.runRenderLoop(() => {
         const mesh = meshes[needingUpdate[i]];
         const matrices = mesh.thinInstanceGetWorldMatrices();
         if (matrices[0] !== undefined) mesh.thinInstanceSetMatrixAt(0, matrices[0]);
-        mesh.thinInstanceRefreshBoundingInfo();
     }
     
     meshesNeedingUpdate.clear();
@@ -2130,11 +2124,11 @@ engine.runRenderLoop(() => {
         playerPos.x = Math.floor(playerPos.x + 0.5);
         playerPos.z = Math.floor(playerPos.z + 0.5);
         
-        const music = document.getElementById("bgm");
+        const music = getElementById("bgm");
         const layer = getLayer(playerPos.y, playerPos.x, playerPos.z);
         const layerDetails = layers[layer] || biomes[layer];
         
-        const musicElem = document.getElementById("music");
+        const musicElem = getElementById("music");
         musicElem.innerText = `♫ ${((layerDetails && layerDetails.music) ? (layerDetails.shortMusic && !musicElem.matches(":hover")) ? layerDetails.shortMusic : layerDetails.music : "None")}`;
         
         if (layer !== CURRENT_LAYER) {
@@ -2182,7 +2176,7 @@ engine.runRenderLoop(() => {
             }
             CURRENT_LAYER = layer;
             
-            const musicElem = document.getElementById("music");
+            const musicElem = getElementById("music");
             musicElem.innerText = `♫ ${((layerDetails && layerDetails.music) ? (layerDetails.shortMusic && !musicElem.matches(":hover")) ? layerDetails.shortMusic : layerDetails.music : "None")}`;
             
             let BLOOM_SETTINGS = {};
@@ -2292,7 +2286,7 @@ engine.runRenderLoop(() => {
     sun.position.copyFrom(perspectiveCamera.position).addInPlace(offset);
     
     function hide() {
-        document.getElementById("tooltip").style.display = "none";
+        getElementById("tooltip").style.display = "none";
         vars.miningStartTime = undefined;
         LAST_ORE = [];
         CURRENT_ORE = [];
@@ -2312,16 +2306,16 @@ engine.runRenderLoop(() => {
             
             if (hit.distance <= inventory.currentPickaxe.range) {
                 const oreData = ores[hit.pickedMesh.metadata?.ore], color = oreData?.color || "#fff";
-                document.getElementById("oreName").textContent = `${oreData?.name || "Unknown"}`;
-                document.getElementById("tooltip").style.display = "";
+                getElementById("oreName").textContent = `${oreData?.name || "Unknown"}`;
+                getElementById("tooltip").style.display = "";
                 if (color[0] === "#") {
-                    document.getElementById("oreName").style.color = color;
-                    document.getElementById("oreName").style.textShadow = "";
-                    document.getElementById("oreName").style.backgroundImage = "none";
+                    getElementById("oreName").style.color = color;
+                    getElementById("oreName").style.textShadow = "";
+                    getElementById("oreName").style.backgroundImage = "none";
                 } else {
-                    document.getElementById("oreName").style.color = "transparent";
-                    document.getElementById("oreName").style.textShadow = "none";
-                    document.getElementById("oreName").style.backgroundImage = color;
+                    getElementById("oreName").style.color = "transparent";
+                    getElementById("oreName").style.textShadow = "none";
+                    getElementById("oreName").style.backgroundImage = color;
                 }
                 
                 let chance = m(x, y, z).chance ?? 0;
@@ -2329,19 +2323,19 @@ engine.runRenderLoop(() => {
                 if (MINING) {
                     miningTick();
                 } else {
-                    document.getElementById("miningTime").innerText = "";
+                    getElementById("miningTime").innerText = "";
                 }
                 
-                document.getElementById("debugInfo").textContent = `${x}, ${y}, ${z}`;
-                if (document.getElementById("totalOres").style.display !== "none") {
-                    document.getElementById("debugInfo").innerText += `\n${m(x, y, z).meshID}`;
+                getElementById("debugInfo").textContent = `${x}, ${y}, ${z}`;
+                if (getElementById("totalOres").style.display !== "none") {
+                    getElementById("debugInfo").innerText += `\n${m(x, y, z).meshID}`;
                 }
-                document.getElementById("oreRarity").textContent = m(x, y, z).placed ? `Placed by ${window.username || "you"}` : (isFinite(chance) && Math.abs(chance) !== 0 ? formatChance(chance) : "");
-                document.getElementById("oreRarity").style.color = tiers[ores[m(x, y, z).ore]?.tier]?.color ?? "#fff";
-                document.getElementById("oreRarity").style.display = "block";
+                getElementById("oreRarity").textContent = m(x, y, z).placed ? `Placed by ${window.username || "you"}` : (isFinite(chance) && Math.abs(chance) !== 0 ? formatChance(chance) : "");
+                getElementById("oreRarity").style.color = tiers[ores[m(x, y, z).ore]?.tier]?.color ?? "#fff";
+                getElementById("oreRarity").style.display = "block";
                 
-                document.getElementById("oreDesc").textContent = oreData?.desc ?? "No description available.";
-                // document.getElementById("miningTime").innerText = formatTime((m(x, y, z).str) / calculatePower(x, y, z) * (1 - (m(x, y, z).progress || 0))).replace("Infinity", "Unbreakable") + " + " + formatTime(inventory.currentPickaxe.delay);
+                getElementById("oreDesc").textContent = oreData?.desc ?? "No description available.";
+                // getElementById("miningTime").innerText = formatTime((m(x, y, z).str) / calculatePower(x, y, z) * (1 - (m(x, y, z).progress || 0))).replace("Infinity", "Unbreakable") + " + " + formatTime(inventory.currentPickaxe.delay);
             } else {
                 hide();
             }

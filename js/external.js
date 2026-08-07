@@ -70,3 +70,12 @@ function formatTime(t, onlyFirst = false) {
 function nd(input) {
     return !input && input !== 0;
 }
+
+const _elemCache = {};
+function getElementById(id) {
+    if (_elemCache[id] === undefined) {
+        return _elemCache[id] = document.getElementById(id);
+    } else {
+        return _elemCache[id];
+    }
+}

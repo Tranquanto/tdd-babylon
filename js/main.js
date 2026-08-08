@@ -1,6 +1,6 @@
 import vars from "./vars.js";
 import { getOre, map, oreAt, checkAdjacent, calculatePower, airAt, calculateRarity, chunks, getBGOre, getColor, breakMap, k } from "./outside_stuff.js";
-import { getLayer, items, layers, locations, oreArray, ores, structureArray, structures, tiers, traits } from "./content/items.js";
+import { getLayer, items, layers, locations, oreArray, ores, structureArray, structures, tiers, traits, sfxOptions } from "./content/items.js";
 import { biomes, topLayer } from "./content/layers.js";
 import { isCave, CHUNK3_RATE, CHUNK_SIZE_3, CHUNK_SIZE, noise, isCaveFloor, isCaveCeiling } from "./noise.js";
 import { inventory, toggleInventory, unlockAchievement } from "./inventory.js";
@@ -28,7 +28,7 @@ let totalOres = 0;
 let GUI_HIDDEN = false;
 
 // set up scene and camera
-const engine = navigator.gpu ? new BABYLON.Engine(canvas, {antialias: true}) : new BABYLON.Engine(canvas, true);
+const engine = navigator.gpu ? new BABYLON.Engine(canvas, true, {useLargeWorldRendering: true}) : new BABYLON.Engine(canvas, true, {useLargeWorldRendering: true});
 if (engine.initAsync !== undefined) await engine.initAsync();
 const scene = new BABYLON.Scene(engine);
 const perspectiveCamera = new BABYLON.UniversalCamera("camera1", new BABYLON.Vector3(0, 2, 0), scene);
@@ -1541,6 +1541,8 @@ function setProgress(x, y, z, dontSet = false, forcedProgress, noAdd = false) {
 }
 
 function updateBreakMesh(x, y, z, pos = map.at(x, y, z), progress = pos.progress) {
+    if (ores[pos?.background]?.customModel) return;
+
     const breakState = Math.min(Math.max(Math.floor(progress * 16), 0), 15);
     let obj = breakMap.at(x, y, z);
     const chunkKey = getChunkKey(x, y, z, MESH_CHUNK_SIZE);
@@ -2032,7 +2034,7 @@ engine.runRenderLoop(() => {
         let collisionResult;
         
         function clonePos() {
-            return {x: player.position.x, y: player.position.y, z: player.position.z};
+            return new BABYLON.Vector3(player.position.x, player.position.y, player.position.z);
         }
         
         function test(nextPos) {

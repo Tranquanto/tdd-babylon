@@ -2073,7 +2073,11 @@ let ores = {
             {maxY: -5400, minY: -9000, chance: {max: 1 / 3300, min: 1 / 820}}
         ],
         str: 84,
-        desc: "A strong, nearly indestructible metal. Do not eat."
+        desc: "A strong, nearly indestructible metal. Do not eat.",
+        light: {
+            col: "#c689ff",
+            str: 0.9
+        }
     },
     soap: {
         name: "Soap",
@@ -3453,6 +3457,14 @@ let ores = {
         },
         condition(x, y, z) {
             return map.at(x, y, z).hasCrystals;
+        },
+        onBeforeGenerate(x, y, z, settings) {
+            settings.customModel = "crystal";
+            const data = getOre(x, y, z, {forceSpawn: true, all: true, caveExclusive: true, crystal: true, seedMod: 0.1});
+            settings.properties.noCollision = true;
+            settings.oreColor = true;
+
+            return {ore: data.ore, bg: "crystal"};
         }
     },
     runicStone: {

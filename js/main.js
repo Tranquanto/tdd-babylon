@@ -465,7 +465,8 @@ export async function generateOre(x, y, z, ore, bg, settings) {
     if (!ores[ore]) return;
     x = Math.round(x), y = Math.round(y), z = Math.round(z);
 
-    if (ores[ore].singleLayer) bg = ore;
+    if (ores[ore].customModel) settings.customModel = ore;
+    if (ores[ore].singleLayer || ores[ore].customModel) bg = ore;
     
     if (ores[ore] && ores[ore].placeholder) {
         if (ores[ore].onGenerate) ores[ore].onGenerate(x, y, z, settings, map.at(x, y, z));
@@ -485,6 +486,8 @@ export async function generateOre(x, y, z, ore, bg, settings) {
     }
     if (!settings) settings = {};
     settings = JSON.parse(JSON.stringify(settings));
+
+    if (!settings.properties) settings.properties = {};
     
     if (!settings.offset) settings.offset = {x: 0, y: 0, z: 0};
     if (nd(settings.offset.x)) settings.offset.x = 0;
@@ -533,8 +536,17 @@ export async function generateOre(x, y, z, ore, bg, settings) {
     if (nd(settings.rotation.x)) settings.rotation.x = 0;
     if (nd(settings.rotation.y)) settings.rotation.y = 0;
     if (nd(settings.rotation.z)) settings.rotation.z = 0;
+
+    if (ores[ore].onBeforeGenerate) {
+        const output = ores[ore].onBeforeGenerate(x, y, z, settings, bg);
+
+        if (output !== undefined) {
+            if (output.ore !== undefined) ore = output.ore;
+            if (output.bg !== undefined) bg = output.bg;
+        }
+    }
     
-    let meshID = `${ore}_${bg}`;
+    let meshID = `${ore}_${settings.customModel ?? bg}`;
     const chunk = getChunkKey(x, y, z, MESH_CHUNK_SIZE);
     const chunkSplit = getChunkKey(x, y, z, MESH_CHUNK_SIZE, true).map(a => a * MESH_CHUNK_SIZE);
     meshID += `_${chunk}`;
@@ -542,10 +554,10 @@ export async function generateOre(x, y, z, ore, bg, settings) {
     let count = meshCounts[meshID] || 0;
     
     let str = (typeof ores[ore].str === "function" ? ores[ore].str(x, y, z) : ores[ore].str);
-    const colorData = (ores[ore].customModel || ores[ore].noTexture || settings.isGeode || ores[ore].oreColor)
+    const colorData = (settings.oreColor || ores[ore].noTexture || settings.isGeode || ores[ore].oreColor)
     ? ores[ore].firstColor
     : ores[ore].forcedColor ?? "#ffffff";
-    let color = getColor(settings.color ?? ores[ore].colorize !== undefined ? ores[ore].colorize() : colorData);
+    let color = getColor(settings.color ?? (ores[ore].colorize !== undefined ? ores[ore].colorize() : colorData));
     
     if (ores[bg] !== undefined && !ores[ore].singleLayer) str = Math.max(str, typeof ores[bg].str === "function" ? ores[bg].str(x, y, z) : ores[bg].str);
     if (str === undefined || str === 0) str = 1;
@@ -556,9 +568,27 @@ export async function generateOre(x, y, z, ore, bg, settings) {
     
     if (meshes[`${meshID}_${count}`] === undefined) {
         let oreMesh;
-        if (ores[ore].customModel) {
-            const result = await BABYLON.ImportMeshAsync(`models/${ore}.glb`, scene);
+        if (settings.customModel) {
+            const result = await BABYLON.ImportMeshAsync(`models/${settings.customModel}.glb`, scene);
             oreMesh = result.meshes[1];
+            const oreMaterial = new BABYLON.StandardMaterial(`customModelMaterial-${x}_${y}_${z}`, scene);
+
+            oreMaterial.diffuseColor = color;
+            oreMaterial.roughness = 1;
+            oreMaterial.specularColor = new BABYLON.Color3(0.01, 0.01, 0.01);
+            oreMaterial.specularPower = 0;
+
+            if (ores[ore]?.emissive) {
+                oreMaterial.emissiveColor = color;
+            }
+            if (ores[ore]?.light) {
+                oreMesh.receiveShadows = false;
+                if (!ores[ore].emissive) {
+                    oreMaterial.emissiveColor = getColor(ores[ore].light.col);
+                }
+            }
+
+            oreMesh.material = oreMaterial;
         } else {
             oreMesh = BABYLON.MeshBuilder.CreateBox(`${meshID}_${count}`, {size: 1, wrap: true}, scene);
             oreMesh.alphaIndex = 99;
@@ -744,6 +774,8 @@ export async function generateOre(x, y, z, ore, bg, settings) {
         meshID: `${meshID}_${count}`,
         index: USE_THIN_INSTANCES ? meshes[`${meshID}_${count}`].thinInstanceCount - 1 : undefined
     });
+
+    Object.assign(map.at(x, y, z), settings.properties);
     totalOres++;
 
     if (ores[ore].textureHasTransparency && !ores[ore].allowTransparent || ores[ore].forceAdjacent) {
@@ -754,9 +786,11 @@ export async function generateOre(x, y, z, ore, bg, settings) {
     if (ores[ore]?.light) {
         let x1 = x, y1 = y, z1 = z;
         if (settings.offset) {
-            x1 += settings.offset.x || 0;
-            y1 += settings.offset.y || 0;
-            z1 += settings.offset.z || 0;
+            const vector = new BABYLON.Vector3(settings.offset.x, settings.offset.y, settings.offset.z);
+            vector.applyRotationQuaternionInPlace(BABYLON.Quaternion.FromEulerAngles(settings.rotation.x, settings.rotation.y, settings.rotation.z));
+            x1 += vector.x || 0;
+            y1 += vector.y || 0;
+            z1 += vector.z || 0;
         }
         if (settings.light?.offset) {
             x1 += settings.light.offset.x || 0;

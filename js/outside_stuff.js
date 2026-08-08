@@ -3,6 +3,7 @@ import { ores, layers, perLayerOreArray, getLayer } from "./content/items.js";
 import { rand01, heightMapNoise, heightMapNoiseLarge, heightMapMountain, heightMapMountainLarge, BIOME_INTERVAL } from "./perlin.js";
 import { isCave } from "./noise.js";
 import Color from "./color.js";
+import { VoxelMap } from "./Map.js";
 
 export function checkAdjacent(x, y, z, func, includeCenter = false) {
     const positions = [[x - 1, y, z], [x + 1, y, z], [x, y - 1, z], [x, y + 1, z], [x, y, z - 1], [x, y, z + 1]];
@@ -47,10 +48,9 @@ function preciseRandom(x, y, z, seed, precisionDigits = 24) {
 }
 
 export default vars;
-export const map = {}; // the map of all blocks
+export const map = new VoxelMap(); // the map of all blocks
 export const chunks = {}; // the map of all chunks
-
-const air = {ore: "air"};
+export const breakMap = new VoxelMap();
 
 /**
  * Gets and sets the ore at a specific coordinate.
@@ -60,12 +60,6 @@ const air = {ore: "air"};
  * @param {object|boolean} v (Optional) Value to set at that coordinate. `true` sets it to air (fallback), and `"delete"` deletes that entry entirely, allowing it to be regenerated.
  * @returns {object|boolean} Returns the value at that coordinate.
  */
-export function m(x, y, z, v) {
-    if (v === undefined) return map[`${x},${y},${z}`] || false;
-    else if (v !== true && v !== "delete") map[`${x},${y},${z}`] = v;
-    else if (v === true) map[`${x},${y},${z}`] = air;
-    else delete map[`${x},${y},${z}`];
-}
 
 const airs = {
     air: 1,
@@ -73,11 +67,11 @@ const airs = {
 }
 
 export function oreAt(x, y, z) {
-    return m(x, y, z) && !airs[m(x, y, z).ore];
+    return map.at(x, y, z) && !airs[map.at(x, y, z).ore];
 }
 
 export function airAt(x, y, z) {
-    return m(x, y, z) && airs[m(x, y, z).ore];
+    return map.at(x, y, z) && airs[map.at(x, y, z).ore];
 }
 
 export function k(x, y, z) { // key

@@ -1,6 +1,6 @@
 import Color from "https://colorjs.io/dist/color.js";
 
-import vars, { airAt } from "./outside_stuff.js";
+import vars, { airAt, map } from "./outside_stuff.js";
 import { items, layers, ores, structures, biomes, locations, topLayer } from "./content/items.js";
 import { isCave } from "./noise.js";
 import { teleport, generateOre } from "./main.js";
@@ -192,7 +192,7 @@ ores.antimatter.tick = (x, y, z) => {
         mesh.rotation.z += mesh.userData.speed;
         mesh.material.opacity = Math.min(1, mesh.material.opacity + 0.003);
         geometry.scale(0.95, 0.95, 0.95);
-        if (m(x, y, z).ore !== "antimatter") vars.scene.remove(mesh);
+        if (map.at(x, y, z).ore !== "antimatter") vars.scene.remove(mesh);
     }
     meshTick();
     const dist = vars.perspectiveCamera.position.distanceTo(new THREE.Vector3(x, y, z));
@@ -200,7 +200,7 @@ ores.antimatter.tick = (x, y, z) => {
 }
 
 ores.antimatter.onRemove = (x, y, z) => {
-    if (!m(x, y, z).placed) {
+    if (!map.at(x, y, z).placed) {
         // destroy a giant sphere of ores around it with a 12 block radius
         for (let dx = -12; dx <= 12; dx++) {
             for (let dy = -12; dy <= 12; dy++) {
@@ -331,7 +331,7 @@ ores.alaphite.onGenerate = (x, y, z) => {
                 mesh.userData.originalPos.y + vector.y,
                 mesh.userData.originalPos.z + vector.z
             );
-            if (m(x, y, z).ore !== "alaphite") {
+            if (map.at(x, y, z).ore !== "alaphite") {
                 mesh.userData.active = false;
                 vars.scene.remove(mesh);
             }
@@ -435,7 +435,7 @@ ores.blackHole.onGenerate = (x, y, z) => {
             // mesh.rotation.z += mesh.userData.speed;
             requestAnimationFrame(meshTick);
             if (vars.PAUSED) return;
-            if (m(x, y, z).ore !== "blackHole") vars.scene.remove(mesh);
+            if (map.at(x, y, z).ore !== "blackHole") vars.scene.remove(mesh);
             
             for (let i = 0; i < mesh.count; i++) {
                 const matrix = new THREE.Matrix4();
@@ -590,9 +590,9 @@ ores.onyx.condition = (x, y, z) => {
 ores.unnamed5.tick = (x, y, z) => {
     // move towards the player
     const playerPos = vars.player.position;
-    const orePos = new BABYLON.Vector3(x, y, z).add(m(x, y, z).offset);
+    const orePos = new BABYLON.Vector3(x, y, z).add(map.at(x, y, z).offset);
     const dir = playerPos.clone().sub(orePos).normalize();
-    m(x, y, z).offset.add(dir.multiplyScalar(0.1));
+    map.at(x, y, z).offset.add(dir.multiplyScalar(0.1));
     vars.matricesToUpdate.add(`${x},${y},${z}`);
 }
 

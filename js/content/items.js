@@ -18,7 +18,7 @@ const replacedIds = { // for items that have been renamed; note: this will be re
 };
 
 import vars from "../vars.js";
-import { getOre, m, airAt, getColor } from "../outside_stuff.js";
+import { getOre, map, airAt, getColor } from "../outside_stuff.js";
 import { PerlinNoise, rand01 } from "../perlin.js";
 
 import {
@@ -368,6 +368,7 @@ let ores = {
         minY: 0,
         str: 0.1,
         textureHasTransparency: true, // to prevent things underneath from not rendering
+        allowTransparent: true,
         noGeode: true,
         noCollision: true,
         desc: "The foliage that grows on trees.",
@@ -385,6 +386,7 @@ let ores = {
         minY: 0,
         str: 0.1,
         textureHasTransparency: true,
+        allowTransparent: true,
         noGeode: true,
         noCollision: true,
         desc: "The foliage that grows on trees in autumn.",
@@ -2357,7 +2359,7 @@ let ores = {
         },
         onGenerate(x, y, z) {
             function meshTick() {
-                if (m(x, y, z).ore === "mythril") {
+                if (map.at(x, y, z).ore === "mythril") {
                     requestAnimationFrame(meshTick);
                 }
                 if (vars.PAUSED) return;
@@ -2378,7 +2380,7 @@ let ores = {
                     tick(particle, FRAME_TIME) {
                         a += 0.01 * FRAME_TIME * 60;
                         particle.points.material.opacity = 1 - Math.abs(a);
-                        if (particle.points.material.opacity < 0 || m(x, y, z).ore !== "mythril") return true;
+                        if (particle.points.material.opacity < 0 || map.at(x, y, z).ore !== "mythril") return true;
                     }
                 });
             }
@@ -3156,7 +3158,7 @@ let ores = {
         excludeFromWiki: 1,
         onGenerate(x, y, z) {
             function meshTick() {
-                if (m(x, y, z).ore === "rainbonite") {
+                if (map.at(x, y, z).ore === "rainbonite") {
                     requestAnimationFrame(meshTick);
                     if (vars.PAUSED) return;
                     
@@ -3319,7 +3321,7 @@ let ores = {
                     // mesh.rotation.z += mesh.userData.speed;
                     requestAnimationFrame(meshTick);
                     if (vars.PAUSED) return;
-                    if (m(x, y, z).ore !== "darkGem") vars.scene.remove(mesh);
+                    if (map.at(x, y, z).ore !== "darkGem") vars.scene.remove(mesh);
 
                     for (let i = 0; i < mesh.count; i++) {
                         const matrix = new THREE.Matrix4();
@@ -3450,7 +3452,7 @@ let ores = {
             }
         },
         condition(x, y, z) {
-            return m(x, y, z).hasCrystals;
+            return map.at(x, y, z).hasCrystals;
         }
     },
     runicStone: {
@@ -3662,8 +3664,8 @@ let ores = {
                             for (let z = 0; z <= zSize.value; z++) {
                                 if (!saveMap[x]) saveMap[x] = [];
                                 if (!saveMap[x][y]) saveMap[x][y] = [];
-                                if (m(x + minX, y + minY, z + minZ)) {
-                                    saveMap[x][y][z] = m(x + minX, y + minY, z + minZ).ore;
+                                if (map.at(x + minX, y + minY, z + minZ)) {
+                                    saveMap[x][y][z] = map.at(x + minX, y + minY, z + minZ).ore;
                                 } else {
                                     saveMap[x][y][z] = "structureVoid";
                                 }
@@ -3719,9 +3721,9 @@ let ores = {
                     for (let x = 0; x < xSize.value; x++) {
                         for (let y = 0; y < ySize.value; y++) {
                             for (let z = 0; z < zSize.value; z++) {
-                                const block = m(x + minX, y + minY, z + minZ)
-                                ? m(x + minX, y + minY, z + minZ).ore
-                                    ? m(x + minX, y + minY, z + minZ)
+                                const block = map.at(x + minX, y + minY, z + minZ)
+                                ? map.at(x + minX, y + minY, z + minZ).ore
+                                    ? map.at(x + minX, y + minY, z + minZ)
                                     : {ore: "air"}
                                 : null;
 
@@ -3948,7 +3950,7 @@ let ores = {
             floor: true
         },
         condition(x, y, z) {
-            return m(x, y, z).hasTorches;
+            return map.at(x, y, z).hasTorches;
         }
     },
     extinguishedTorch: {
@@ -3975,7 +3977,7 @@ let ores = {
             floor: true
         },
         condition(x, y, z) {
-            return m(x, y, z).hasExtinguishedTorches;
+            return map.at(x, y, z).hasExtinguishedTorches;
         },
         drops: [{id: "wood", count: () => Math.round(Math.random())}, {id: "coal", count: () => Math.round(Math.random())}]
     },
@@ -4159,7 +4161,7 @@ let ores = {
         desc: "A crate that contains various ores.",
         sfx: "wood",
         onBreak(x, y, z, inventory) {
-            if (!m(x, y, z).placed) {
+            if (!map.at(x, y, z).placed) {
                 // gives random ores
                 const item = getOre(x, y, z, {caveExclusive: true, all: true, maxChance: 1, forceSpawn: true, crate: true});
                 if (!item || ores[item.ore].noCrate) return;

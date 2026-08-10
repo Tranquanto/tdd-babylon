@@ -1,7 +1,7 @@
 import vars from "./vars.js";
 import { getOre, map, oreAt, checkAdjacent, calculatePower, airAt, calculateRarity, chunks, getBGOre, getColor, breakMap, k } from "./outside_stuff.js";
 import { getLayer, items, layers, locations, oreArray, ores, structureArray, structures, tiers, traits, sfxOptions } from "./content/items.js";
-import { biomes, topLayer } from "./content/layers.js";
+import { biomes, getBiomeNumber, getHumidity, getTemperature, topLayer } from "./content/layers.js";
 import { isCave, CHUNK3_RATE, CHUNK_SIZE_3, CHUNK_SIZE, noise, isCaveFloor, isCaveCeiling } from "./noise.js";
 import { inventory, toggleInventory, unlockAchievement } from "./inventory.js";
 import { rand01 } from "./perlin.js";
@@ -20,7 +20,7 @@ let FRAME_TIME = 0;
 let MINING = false;
 let LAST_ORE = [], CURRENT_ORE = [];
 let CURRENT_LAYER, INITIALIZED_LAYER = false;
-let generatingChunks = [], generatingChunks3 = [], priorityChunks3 = new Set(), generatedChunks = new Set(), GENERATION_DISTANCE = 64;
+let generatingChunks = [], generatingChunks3 = [], generatedChunks = new Set(), GENERATION_DISTANCE = 64;
 let generatedStructures = {};
 let lightArr = [], radArr = [], repairArr = [], repairObj = {}, lightKeys = {};
 let USE_THIN_INSTANCES = true;
@@ -472,10 +472,10 @@ export async function generateOre(x, y, z, ore, bg, settings) {
         if (ores[ore].onGenerate) ores[ore].onGenerate(x, y, z, settings, map.at(x, y, z));
         return;
     }
-    
+
     if (oreAt(x, y, z) && !settings.forcedReplace) {
         return map.at(x, y, z);
-    } else if (airAt(x, y, z) && !settings.forced && !map.at(x, y, z)?.temp) {
+    } else if (airAt(x, y, z) && !settings.forced && !map.at(x, y, z)?.temp || map.at(x, y, z)?.loadingModel) {
         return map.at(x, y, z);
     } else if (!map.at(x, y, z)?.temp && ores[ore]) {
         removeOre(x, y, z, {fullyRemove: true});
@@ -557,7 +557,7 @@ export async function generateOre(x, y, z, ore, bg, settings) {
     const colorData = (settings.oreColor || ores[ore].noTexture || settings.isGeode || ores[ore].oreColor)
     ? ores[ore].firstColor
     : ores[ore].forcedColor ?? "#ffffff";
-    let color = getColor(settings.color ?? (ores[ore].colorize !== undefined ? ores[ore].colorize() : colorData));
+    let color = getColor(settings.color ?? (ores[ore].colorize !== undefined ? ores[ore].colorize(settings) : colorData));
     
     if (ores[bg] !== undefined && !ores[ore].singleLayer) str = Math.max(str, typeof ores[bg].str === "function" ? ores[bg].str(x, y, z) : ores[bg].str);
     if (str === undefined || str === 0) str = 1;
@@ -567,16 +567,22 @@ export async function generateOre(x, y, z, ore, bg, settings) {
     }
     
     if (meshes[`${meshID}_${count}`] === undefined) {
+        meshes[`${meshID}_${count}`] = true;
         let oreMesh;
         if (settings.customModel) {
+            map.at(x, y, z, {ore: "air", loadingModel: true});
             const result = await BABYLON.ImportMeshAsync(`models/${settings.customModel}.glb`, scene);
             oreMesh = result.meshes[1];
-            const oreMaterial = new BABYLON.StandardMaterial(`customModelMaterial-${x}_${y}_${z}`, scene);
+            oreMesh.id = oreMesh.name = `${meshID}_${count}`;
+            const oreMaterial = new BABYLON.PBRMaterial(`customModelMaterial-${x}_${y}_${z}`, scene);
 
-            oreMaterial.diffuseColor = color;
+            if (ores[ore].colorize === undefined) oreMaterial.albedoColor = color;
             oreMaterial.roughness = 1;
+            oreMaterial.metallic = 0;
             oreMaterial.specularColor = new BABYLON.Color3(0.01, 0.01, 0.01);
             oreMaterial.specularPower = 0;
+
+            oreMaterial.albedoTexture = oreMesh.material.albedoTexture;
 
             if (ores[ore]?.emissive) {
                 oreMaterial.emissiveColor = color;
@@ -587,6 +593,10 @@ export async function generateOre(x, y, z, ore, bg, settings) {
                     oreMaterial.emissiveColor = getColor(ores[ore].light.col);
                 }
             }
+
+            oreMaterial.emissiveColor.r **= 2;
+            oreMaterial.emissiveColor.g **= 2;
+            oreMaterial.emissiveColor.b **= 2;
 
             oreMesh.material = oreMaterial;
         } else {
@@ -672,6 +682,21 @@ export async function generateOre(x, y, z, ore, bg, settings) {
             }
             backgroundMaterial.albedoTexture = backgroundMaterial.baseTexture = ores[ore]?.singleLayer ? getTexture(ore) : getTexture(bg);
             backgroundMaterial.diffuseTexture = getTexture(bg);
+
+            if (ores[ore].disableLighting) {
+                for (const oreMaterial of materials) {
+                    oreMaterial.disableLighting = true;
+                    oreMaterial.emissiveTexture = oreMaterial.albedoTexture;
+                    oreMaterial.emissiveColor = BABYLON.Color3.White();
+                }
+            }
+            if (ores[bg].disableLighting) {
+                for (const oreMaterial of bgMaterials) {
+                    oreMaterial.disableLighting = true;
+                    oreMaterial.emissiveTexture = oreMaterial.albedoTexture;
+                    oreMaterial.emissiveColor = BABYLON.Color3.White();
+                }
+            }
             
             if (ores[ore]?.textureHasTransparency) {
                 backgroundMaterial.alpha = 0;
@@ -724,7 +749,7 @@ export async function generateOre(x, y, z, ore, bg, settings) {
         if (USE_THIN_INSTANCES) oreMesh.thinInstanceEnablePicking = true; // allow picking by raycast
         
         meshes[`${meshID}_${count}`] = oreMesh;
-    }
+    } else if (meshes[`${meshID}_${count}`] === true) return false;
     
     // create an instance of the mesh for better performance
     if (USE_THIN_INSTANCES) {
@@ -774,6 +799,8 @@ export async function generateOre(x, y, z, ore, bg, settings) {
         meshID: `${meshID}_${count}`,
         index: USE_THIN_INSTANCES ? meshes[`${meshID}_${count}`].thinInstanceCount - 1 : undefined
     });
+
+    if (settings.cssColor !== undefined) map.at(x, y, z).color = settings.cssColor;
 
     Object.assign(map.at(x, y, z), settings.properties);
     totalOres++;
@@ -841,6 +868,11 @@ function removeThinInstance(mesh, index) {
             mesh.thinInstanceSetMatrixAt(index, last);
         }
         mesh.thinInstanceCount--;
+        if (mesh.thinInstanceCount <= 0) {
+            if (meshes[mesh.name]) delete meshes[mesh.name];
+            mesh.dispose();
+            return true;
+        }
 
         if (mesh._thinInstanceDataStorage) {
             mesh._thinInstanceDataStorage.worldMatrices = null;
@@ -856,6 +888,7 @@ function removeOre(x, y, z, settings = {}) {
     x = Math.round(x), y = Math.round(y), z = Math.round(z);
     const oreData = map.at(x, y, z);
     if (oreData) {
+        updateBreakMesh(x, y, z, oreData, 2);
         if (oreAt(x, y, z)) {
             const meshID = oreData.meshID;
             /** @type {BABYLON.Mesh} */
@@ -936,6 +969,8 @@ function removeOre(x, y, z, settings = {}) {
                         getElementById(vars.overlays[overlayIndex].ore + "Overlay").style.opacity = 0;
                         vars.overlays.splice(overlayIndex, 1);
                     }
+                } else {
+                    console.warn("Could not remove instance of mesh", meshID, "with index", index);
                 }
             }
             if (!settings.keep) {
@@ -1001,6 +1036,9 @@ function getChunkKey(x, y, z, size, split) {
 window.removeOre = removeOre;
 
 function spawnOre(x, y, z, settings) {
+    x = Math.round(x);
+    y = Math.round(y);
+    z = Math.round(z);
     if (settings === undefined) settings = {caveExclusive: false, noCave: false};
     if (map.at(x, y, z) && !settings.forced && !settings.forceReplace && !map.at(x, y, z).temp) return false;
     if (typeof settings === "string") settings = {caveExclusive: true, noCave: true, caveType: settings};
@@ -1033,338 +1071,338 @@ function spawnOre(x, y, z, settings) {
                 y < structurePos.y || y >= structurePos.y + structure.height ||
                 z < structurePos.z || z >= structurePos.z + structure.depth)) return false;
                 
-                return {centerX, centerY, centerZ};
-            }
+            return {centerX, centerY, centerZ};
+        }
             
-            let testResult = test(gridX, gridY, gridZ);
-            if (!testResult) {
-                for (let xOff = -1; xOff <= 1; xOff++) {
-                    for (let yOff = -1; yOff <= 1; yOff++) {
-                        for (let zOff = -1; zOff <= 1; zOff++) {
-                            if (xOff === 0 && yOff === 0 && zOff === 0) continue;
-                            const newTestResult = test(gridX + xOff, gridY + yOff, gridZ + zOff);
-                            if (newTestResult) {
-                                testResult = newTestResult;
-                                gridX += xOff;
-                                gridY += yOff;
-                                gridZ += zOff;
-                                break;
-                            }
+        let testResult = test(gridX, gridY, gridZ);
+        if (!testResult) {
+            for (let xOff = -1; xOff <= 1; xOff++) {
+                for (let yOff = -1; yOff <= 1; yOff++) {
+                    for (let zOff = -1; zOff <= 1; zOff++) {
+                        if (xOff === 0 && yOff === 0 && zOff === 0) continue;
+                        const newTestResult = test(gridX + xOff, gridY + yOff, gridZ + zOff);
+                        if (newTestResult) {
+                            testResult = newTestResult;
+                            gridX += xOff;
+                            gridY += yOff;
+                            gridZ += zOff;
+                            break;
                         }
                     }
                 }
             }
-            
-            const {centerX, centerY, centerZ} = testResult || {};
-            if (!centerX) continue;
-            
-            const structureNoiseVal = noise(centerX, centerY, centerZ);
-            if (structure.caveExclusive !== undefined && (structureNoiseVal.value > structureNoiseVal.caveReq !== structure.caveExclusive)) continue;
-            
-            const exists = rand01(gridX, gridY, gridZ, vars.seed) < calculateRarity(structure, centerY, centerX, centerZ);
-            if (exists && !(generatedStructures[structure.id] && generatedStructures[structure.id][`${gridX}_${gridY}_${gridZ}`])) {
-                generateStructure(gridX, gridY, gridZ, structure.id, {centerX, centerY, centerZ});
-                return map.at(x, y, z);
-            }
         }
         
-        const noiseVal = noise(x, y, z);
-        if (noiseVal.value > noiseVal.caveReq && !map.at(x, y, z)?.temp) {
-            if (!settings.noCave) generateCave(x, y, z);
-            return map.at(x, y, z);
+        const {centerX, centerY, centerZ} = testResult || {};
+        if (!centerX) continue;
+        
+        const structureNoiseVal = noise(centerX, centerY, centerZ);
+        if (structure.caveExclusive !== undefined && (structureNoiseVal.value > structureNoiseVal.caveReq !== structure.caveExclusive)) continue;
+        
+        const exists = rand01(gridX, gridY, gridZ, vars.seed) < calculateRarity(structure, centerY, centerX, centerZ);
+        if (exists && !(generatedStructures[structure.id] && generatedStructures[structure.id][`${gridX}_${gridY}_${gridZ}`])) {
+            generateStructure(gridX, gridY, gridZ, structure.id, {centerX, centerY, centerZ});
+            // return map.at(x, y, z);
         }
-        
-        if (isCaveFloor(x, y, z)) settings.isCaveFloor = true;
-        if (isCaveCeiling(x, y, z)) settings.isCaveCeiling = true;
-        if (!Object.keys(settings.cave).length) delete settings.cave;
-        
-        let oreData;
-        
-        if (map.at(x, y, z)?.temp) {
-            const data = map.at(x, y, z);
-            oreData = {};
-            
-            if (data.dripstone) {
-                settings.noVein = true;
-                settings.noGeode = true;
-                oreData.ore = oreData.bg = getBGOre(x, Math.round(y - 5 + data.dripstone * 5), z);
-                settings.scale.x = settings.scale.z = data.dripstone;
-            } else {
-                settings.cave = {};
-                settings.caveAir = true;
-                if (data.caveFloor) {
-                    settings.cave = { floor: true };
-                }
-                if (data.caveCeiling) {
-                    settings.cave.ceiling = true;
-                }
-                if (data.caveWall) {
-                    settings.cave.walls = data.caveWall;
-                }
-                settings.cave.air = true;
-                if (!Object.keys(settings.cave).length) return map.at(x, y, z, { ore: "air", caveType: data.caveType });
-            }
-        }
-        
-        if (!oreData?.ore) {
-            oreData = getOre(x, y, z, settings);
-        }
-        if (!oreData || oreData.ore === null) {
-            map.at(x, y, z, true);
-            return map.at(x, y, z);
-        }
-        settings.chance = oreData.chance;
-        
-        generateOre(x, y, z, oreData.ore, oreData.bg, settings);
-        
-        if (ores[oreData.ore]?.tree) {
-            let h = ores[oreData.ore].tree.height || { min: 4, max: 4 };
-            if (typeof h === "number") h = { min: h, max: h };
-            const height = Math.floor(Math.random() * (h.max - h.min + 1)) + h.min;
-            generateTree(
-                x, y, z,
-                oreData.ore,
-                typeof ores[oreData.ore].tree.leaves.block === "function" ? ores[oreData.ore].tree.leaves.block(x, y, z) : ores[oreData.ore].tree.leaves.block,
-                height,
-                typeof ores[oreData.ore].tree.leaves.size === "function" ? ores[oreData.ore].tree.leaves.size(x, y, z) : ores[oreData.ore].tree.leaves.size,
-                settings
-            );
-        }
+    }
+    
+    const noiseVal = noise(x, y, z);
+    if (noiseVal.value > noiseVal.caveReq && !map.at(x, y, z)?.temp) {
+        if (!settings.noCave) generateCave(x, y, z);
         return map.at(x, y, z);
     }
     
-    function generateAdjacent(x, y, z, settings) {
-        if (settings === true) settings = {caveExclusive: true};
-        spawnOre(x + 1, y, z, settings);
-        spawnOre(x - 1, y, z, settings);
-        spawnOre(x, y + 1, z, settings);
-        spawnOre(x, y - 1, z, settings);
-        spawnOre(x, y, z + 1, settings);
-        spawnOre(x, y, z - 1, settings);
-    }
+    if (isCaveFloor(x, y, z)) settings.isCaveFloor = true;
+    if (isCaveCeiling(x, y, z)) settings.isCaveCeiling = true;
+    if (!Object.keys(settings.cave).length) delete settings.cave;
     
-    function generateCave(x, y, z) {
-        x = Math.round(x);
-        y = Math.round(y);
-        z = Math.round(z);
-        
-        workers.findEmpty.postMessage({x, y, z, seed: vars.seed});
-    }
+    let oreData;
     
-    workers.findEmpty.addEventListener("message", e => {
-        const data = e.data;
-        const {mToSend, mToModify, priorityChunksToAdd} = data;
+    if (map.at(x, y, z)?.temp) {
+        const data = map.at(x, y, z);
+        oreData = {};
         
-        for (let i = 0; i < mToSend.length; i++) {
-            if (!map.at(...(mToSend[i].slice(0, 3)))) {
-                map.at(...mToSend[i]);
-            }
-        }
-        for (let i = 0; i < mToModify.length; i++) {
-            const j = mToModify[i];
-            map.at(j[0], j[1], j[2])[j[3]] = j[4];
-        }
-        priorityChunks3 = new Set([...priorityChunks3, ...priorityChunksToAdd]);
-    });
-    
-    function generateTree(x, y, z, trunk, leaves, height = 4, leafSize = 2, settings = {}) {
-        settings.isTree = true;
-        settings.isVein = true;
-        for (let y1 = y; y1 < y + height; y1++) {
-            generateOre(x, y1, z, trunk, trunk, settings);
-        }
-        for (let x1 = x - leafSize; x1 <= x + leafSize; x1++) {
-            for (let y1 = y + height - leafSize; y1 <= y + height + leafSize; y1++) {
-                for (let z1 = z - leafSize; z1 <= z + leafSize; z1++) {
-                    if (Math.sqrt((x1 - x) ** 2 + (y1 - y - height) ** 2 + (z1 - z) ** 2) < leafSize + 0.5) {
-                        generateOre(x1, y1, z1, leaves, leaves, settings);
-                    }
-                }
-            }
-        }
-    }
-    
-    function getStructurePlacementData(structure, gridX, gridY, gridZ) {
-        const structureID = structure.id || "unknown";
-        const structureSeed = structureID.split("").reduce((seed, char) => (seed * 31 + char.charCodeAt(0)) | 0, 0);
-        const getStructureOffset = (axis, maxOffset) => {
-            if (maxOffset <= 0) return 0;
-            const salt = axis === "x" ? 137 : axis === "y" ? 911 : 2713;
-            const value = rand01(gridX + salt, gridY - salt, gridZ + salt, vars.seed ^ structureSeed);
-            return Math.floor(value * (maxOffset * 2 + 1)) - maxOffset;
-        };
-        
-        const gridJitter = typeof structure.gridJitter === "number" ? Math.max(0, Math.min(1, structure.gridJitter)) : 1;
-        const maxOffsetX = Math.floor((structure.width - 1) * gridJitter);
-        const maxOffsetY = Math.floor((structure.height - 1) * gridJitter);
-        const maxOffsetZ = Math.floor((structure.depth - 1) * gridJitter);
-        const jitterX = getStructureOffset("x", maxOffsetX);
-        const jitterY = getStructureOffset("y", maxOffsetY);
-        const jitterZ = getStructureOffset("z", maxOffsetZ);
-        
-        const x = gridX * structure.width + structure.gridOffset.x + jitterX;
-        const y = gridY * structure.height + structure.gridOffset.y + jitterY;
-        const z = gridZ * structure.depth + structure.gridOffset.z + jitterZ;
-        
-        return {
-            x,
-            y,
-            z,
-            centerX: Math.floor(x + structure.width / 2),
-            centerY: Math.floor(y + structure.height / 2),
-            centerZ: Math.floor(z + structure.depth / 2)
-        };
-    }
-    
-    export function generateStructure(gridX, gridY, gridZ, structure, settings) {
-        if (settings === undefined) settings = {};
-        if (settings === true) settings = {forceLocation: true};
-        const str = structures[structure];
-        if (!generatedStructures[structure]) generatedStructures[structure] = {};
-        if (!str) return;
-        
-        const structurePos = getStructurePlacementData(str, gridX, gridY, gridZ);
-        let x = structurePos.x;
-        let y = structurePos.y;
-        let z = structurePos.z;
-        if (settings.centerX === undefined) settings.centerX = structurePos.centerX;
-        if (settings.centerY === undefined) settings.centerY = structurePos.centerY;
-        if (settings.centerZ === undefined) settings.centerZ = structurePos.centerZ;
-        
-        if (settings.absPos) {
-            if (!settings.noCenter) {
-                x = gridX - Math.floor(str.width / 2);
-                y = gridY - Math.floor(str.height / 2);
-                z = gridZ - Math.floor(str.depth / 2);
-                
-                settings.centerX = gridX;
-                settings.centerY = gridY;
-                settings.centerZ = gridZ;
-            } else {
-                x = gridX;
-                y = gridY;
-                z = gridZ;
-                
-                settings.centerX = gridX + Math.floor(str.width / 2);
-                settings.centerY = gridY + Math.floor(str.height / 2);
-                settings.centerZ = gridZ + Math.floor(str.depth / 2);
-            }
+        if (data.dripstone) {
+            settings.noVein = true;
+            settings.noGeode = true;
+            oreData.ore = oreData.bg = getBGOre(x, Math.round(y - 5 + data.dripstone * 5), z);
+            settings.scale.x = settings.scale.z = data.dripstone;
         } else {
-            generatedStructures[structure][`${gridX}_${gridY}_${gridZ}`] = true;
+            settings.cave = {};
+            settings.caveAir = true;
+            if (data.caveFloor) {
+                settings.cave = { floor: true };
+            }
+            if (data.caveCeiling) {
+                settings.cave.ceiling = true;
+            }
+            if (data.caveWall) {
+                settings.cave.walls = data.caveWall;
+            }
+            settings.cave.air = true;
+            if (!Object.keys(settings.cave).length) return map.at(x, y, z, { ore: "air", caveType: data.caveType });
         }
-        
-        let empty = [];
-        
-        if (str.key && str.layout) {
-            const key = JSON.parse(JSON.stringify(str.key));
-            for (const k in str.key) {
-                if (typeof str.key[k] === "function") {
-                    key[k] = str.key[k](x, y, z);
+    }
+    
+    if (!oreData?.ore) {
+        oreData = getOre(x, y, z, settings);
+    }
+    if (!oreData || oreData.ore === null) {
+        map.at(x, y, z, true);
+        return map.at(x, y, z);
+    }
+    settings.chance = oreData.chance;
+    
+    generateOre(x, y, z, oreData.ore, oreData.bg, settings);
+    
+    if (ores[oreData.ore]?.tree) {
+        let h = ores[oreData.ore].tree.height || { min: 4, max: 4 };
+        if (typeof h === "number") h = { min: h, max: h };
+        const height = Math.floor(Math.random() * (h.max - h.min + 1)) + h.min;
+        generateTree(
+            x, y, z,
+            oreData.ore,
+            typeof ores[oreData.ore].tree.leaves.block === "function" ? ores[oreData.ore].tree.leaves.block(x, y, z) : ores[oreData.ore].tree.leaves.block,
+            height,
+            typeof ores[oreData.ore].tree.leaves.size === "function" ? ores[oreData.ore].tree.leaves.size(x, y, z) : ores[oreData.ore].tree.leaves.size,
+            settings
+        );
+    }
+    return map.at(x, y, z);
+}
+
+function generateAdjacent(x, y, z, settings) {
+    if (settings === true) settings = {caveExclusive: true};
+    spawnOre(x + 1, y, z, settings);
+    spawnOre(x - 1, y, z, settings);
+    spawnOre(x, y + 1, z, settings);
+    spawnOre(x, y - 1, z, settings);
+    spawnOre(x, y, z + 1, settings);
+    spawnOre(x, y, z - 1, settings);
+}
+
+function generateCave(x, y, z) {
+    x = Math.round(x);
+    y = Math.round(y);
+    z = Math.round(z);
+    
+    workers.findEmpty.postMessage({x, y, z, seed: vars.seed});
+}
+
+workers.findEmpty.addEventListener("message", e => {
+    const data = e.data;
+    const {mToSend, mToModify, priorityChunksToAdd} = data;
+    
+    for (let i = 0; i < mToSend.length; i++) {
+        if (!map.at(...(mToSend[i].slice(0, 3)))) {
+            map.at(...mToSend[i]);
+        }
+    }
+    for (let i = 0; i < mToModify.length; i++) {
+        const j = mToModify[i];
+        map.at(j[0], j[1], j[2])[j[3]] = j[4];
+    }
+    generatedChunks = generatedChunks.difference(priorityChunksToAdd);
+});
+
+function generateTree(x, y, z, trunk, leaves, height = 4, leafSize = 2, settings = {}) {
+    settings.isTree = true;
+    settings.isVein = true;
+    for (let y1 = y; y1 < y + height; y1++) {
+        generateOre(x, y1, z, trunk, trunk, settings);
+    }
+    for (let x1 = x - leafSize; x1 <= x + leafSize; x1++) {
+        for (let y1 = y + height - leafSize; y1 <= y + height + leafSize; y1++) {
+            for (let z1 = z - leafSize; z1 <= z + leafSize; z1++) {
+                if (Math.sqrt((x1 - x) ** 2 + (y1 - y - height) ** 2 + (z1 - z) ** 2) < leafSize + 0.5) {
+                    generateOre(x1, y1, z1, leaves, leaves, settings);
                 }
             }
-            for (const y1 in str.layout) {
-                for (const x1 in str.layout[y1]) {
-                    for (const z1 in str.layout[y1][x1]) {
-                        const block = key[str.layout[y1][x1][z1]];
-                        
-                        const x2 = x + Number(x1);
-                        const y2 = y + Number(y1);
-                        const z2 = z + Number(z1);
-                        
-                        if (block === null) continue;
-                        if (block) {
-                            if (map.at(x2, y2, z2) && !settings.forced && !map.at(x2, y2, z2).temp) continue;
-                            if (block === "air") {
-                                if (settings.forced) removeOre(x2, y2, z2, {type: "structure"});
-                                map.at(x2, y2, z2, true);
+        }
+    }
+}
+
+function getStructurePlacementData(structure, gridX, gridY, gridZ) {
+    const structureID = structure.id || "unknown";
+    const structureSeed = structureID.split("").reduce((seed, char) => (seed * 31 + char.charCodeAt(0)) | 0, 0);
+    const getStructureOffset = (axis, maxOffset) => {
+        if (maxOffset <= 0) return 0;
+        const salt = axis === "x" ? 137 : axis === "y" ? 911 : 2713;
+        const value = rand01(gridX + salt, gridY - salt, gridZ + salt, vars.seed ^ structureSeed);
+        return Math.floor(value * (maxOffset * 2 + 1)) - maxOffset;
+    };
+    
+    const gridJitter = typeof structure.gridJitter === "number" ? Math.max(0, Math.min(1, structure.gridJitter)) : 1;
+    const maxOffsetX = Math.floor((structure.width - 1) * gridJitter);
+    const maxOffsetY = Math.floor((structure.height - 1) * gridJitter);
+    const maxOffsetZ = Math.floor((structure.depth - 1) * gridJitter);
+    const jitterX = getStructureOffset("x", maxOffsetX);
+    const jitterY = getStructureOffset("y", maxOffsetY);
+    const jitterZ = getStructureOffset("z", maxOffsetZ);
+    
+    const x = gridX * structure.width + structure.gridOffset.x + jitterX;
+    const y = gridY * structure.height + structure.gridOffset.y + jitterY;
+    const z = gridZ * structure.depth + structure.gridOffset.z + jitterZ;
+    
+    return {
+        x,
+        y,
+        z,
+        centerX: Math.floor(x + structure.width / 2),
+        centerY: Math.floor(y + structure.height / 2),
+        centerZ: Math.floor(z + structure.depth / 2)
+    };
+}
+
+export function generateStructure(gridX, gridY, gridZ, structure, settings) {
+    if (settings === undefined) settings = {};
+    if (settings === true) settings = {forceLocation: true};
+    const str = structures[structure];
+    if (!generatedStructures[structure]) generatedStructures[structure] = {};
+    if (!str) return;
+    
+    const structurePos = getStructurePlacementData(str, gridX, gridY, gridZ);
+    let x = structurePos.x;
+    let y = structurePos.y;
+    let z = structurePos.z;
+    if (settings.centerX === undefined) settings.centerX = structurePos.centerX;
+    if (settings.centerY === undefined) settings.centerY = structurePos.centerY;
+    if (settings.centerZ === undefined) settings.centerZ = structurePos.centerZ;
+    
+    if (settings.absPos) {
+        if (!settings.noCenter) {
+            x = gridX - Math.floor(str.width / 2);
+            y = gridY - Math.floor(str.height / 2);
+            z = gridZ - Math.floor(str.depth / 2);
+            
+            settings.centerX = gridX;
+            settings.centerY = gridY;
+            settings.centerZ = gridZ;
+        } else {
+            x = gridX;
+            y = gridY;
+            z = gridZ;
+            
+            settings.centerX = gridX + Math.floor(str.width / 2);
+            settings.centerY = gridY + Math.floor(str.height / 2);
+            settings.centerZ = gridZ + Math.floor(str.depth / 2);
+        }
+    } else {
+        generatedStructures[structure][`${gridX}_${gridY}_${gridZ}`] = true;
+    }
+    
+    let empty = [];
+    
+    if (str.key && str.layout) {
+        const key = JSON.parse(JSON.stringify(str.key));
+        for (const k in str.key) {
+            if (typeof str.key[k] === "function") {
+                key[k] = str.key[k](x, y, z);
+            }
+        }
+        for (const y1 in str.layout) {
+            for (const x1 in str.layout[y1]) {
+                for (const z1 in str.layout[y1][x1]) {
+                    const block = key[str.layout[y1][x1][z1]];
+                    
+                    const x2 = x + Number(x1);
+                    const y2 = y + Number(y1);
+                    const z2 = z + Number(z1);
+                    
+                    if (block === null) continue;
+                    if (block) {
+                        if (map.at(x2, y2, z2) && !settings.forced && !map.at(x2, y2, z2).temp) continue;
+                        if (block === "air") {
+                            if (settings.forced) removeOre(x2, y2, z2, {type: "structure"});
+                            map.at(x2, y2, z2, true);
+                            empty.push(x2, y2, z2);
+                        } else if (ores[block]) {
+                            if (settings.forced) removeOre(x2, y2, z2, {fullyRemove: true, type: "structure"});
+                            generateOre(x2, y2, z2, block, getBGOre(x2, y2, z2), settings || {noUpdate: true});
+                            if (ores[block].textureHasTransparency && !ores[block].allowTransparent || ores[block].forceAdjacent) {
                                 empty.push(x2, y2, z2);
-                            } else if (ores[block]) {
-                                if (settings.forced) removeOre(x2, y2, z2, {fullyRemove: true, type: "structure"});
-                                generateOre(x2, y2, z2, block, getBGOre(x2, y2, z2), settings || {noUpdate: true});
-                                if (ores[block].textureHasTransparency && !ores[block].allowTransparent || ores[block].forceAdjacent) {
-                                    empty.push(x2, y2, z2);
-                                }
                             }
                         }
                     }
                 }
             }
-        } else if (str.format === "snbt" || str.palette && str.blocks) {
-            const palette = str.palette;
-            for (let i = 0; i < str.blocks.length; i++) {
-                const {pos, state} = str.blocks[i];
-                if (palette[state].name === "air") {
-                    if (settings.forced) removeOre(x + pos[0], y + pos[1], z + pos[2], {type: "structure"});
-                    map.at(x + pos[0], y + pos[1], z + pos[2], true);
-                    empty.push(x + pos[0], y + pos[1], z + pos[2]);
-                    continue;
-                } else if (palette[state].name === "structureVoid") {
-                    if (settings.forced) removeOre(x + pos[0], y + pos[1], z + pos[2], {fullyRemove: true, type: "structure"});
-                    continue;
-                }
-                if (ores[palette[state].name].textureHasTransparency && !ores[palette[state].name].allowTransparent || ores[palette[state].name].forceAdjacent) {
-                    empty.push(x + pos[0], y + pos[1], z + pos[2]);
-                }
+        }
+    } else if (str.format === "snbt" || str.palette && str.blocks) {
+        const palette = str.palette;
+        for (let i = 0; i < str.blocks.length; i++) {
+            const {pos, state} = str.blocks[i];
+            if (palette[state].name === "air") {
+                if (settings.forced) removeOre(x + pos[0], y + pos[1], z + pos[2], {type: "structure"});
+                map.at(x + pos[0], y + pos[1], z + pos[2], true);
+                empty.push(x + pos[0], y + pos[1], z + pos[2]);
+                continue;
+            } else if (palette[state].name === "structureVoid") {
                 if (settings.forced) removeOre(x + pos[0], y + pos[1], z + pos[2], {fullyRemove: true, type: "structure"});
-                generateOre(
-                    x + pos[0],
-                    y + pos[1],
-                    z + pos[2],
-                    palette[state].name,
-                    getBGOre(x + pos[0], y + pos[1], z + pos[2]),
-                    settings || { noUpdate: true }
-                );
+                continue;
             }
-        }
-        
-        for (let i = 0; i < empty.length; i += 3) {
-            const x1 = empty[i];
-            const y1 = empty[i + 1];
-            const z1 = empty[i + 2];
-            generateAdjacent(x1, y1, z1, {noUpdate: true});
-        }
-        
-        if (str.onGenerate !== undefined) str.onGenerate(x, y, z);
-        
-        if (str.log !== false) console.log(`Generated structure ${structure} at ${settings.centerX}, ${settings.centerY}, ${settings.centerZ} (grid: ${gridX}, ${gridY}, ${gridZ}; world: ${x}, ${y}, ${z})`);
-    }
-    
-    function generateChunk(x, z) {
-        const sets = {noVein: true, noGeode: true, forceReplace: ["leaves", "autumnalLeaves"], surface: true};
-        const sets2 = {noVein: true, noGeode: true, forceReplace: ["leaves", "autumnalLeaves"]};
-        for (let x1 = x * CHUNK_SIZE; x1 < (x + 1) * CHUNK_SIZE; x1++) {
-            for (let z1 = z * CHUNK_SIZE; z1 < (z + 1) * CHUNK_SIZE; z1++) {
-                const y1 = topLayer(x1, z1);
-                spawnOre(x1, y1, z1, sets);
-                spawnOre(x1, y1 + 1, z1, sets);
-                let y = y1;
-                function check(y) {
-                    for (const pos of [[x1 - 1, z1], [x1 + 1, z1], [x1, z1 - 1], [x1, z1 + 1]]) {
-                        if (y > topLayer(pos[0], pos[1])) return false;
-                    }
-                    return true;
-                }
-                while (!check(--y)) {
-                    spawnOre(x1, y, z1, sets2);
-                }
-                spawnOre(x1, layers.sky.min, z1, sets);
+            if (ores[palette[state].name].textureHasTransparency && !ores[palette[state].name].allowTransparent || ores[palette[state].name].forceAdjacent) {
+                empty.push(x + pos[0], y + pos[1], z + pos[2]);
             }
+            if (settings.forced) removeOre(x + pos[0], y + pos[1], z + pos[2], {fullyRemove: true, type: "structure"});
+            generateOre(
+                x + pos[0],
+                y + pos[1],
+                z + pos[2],
+                palette[state].name,
+                getBGOre(x + pos[0], y + pos[1], z + pos[2]),
+                settings || { noUpdate: true }
+            );
         }
     }
     
-    function generateChunk3(x, y, z, noCave = false) { // used for places like space
-        let generatedAny = false;
-        let startTime = performance.now();
-        const sets = {};
-        // 2if (noCave) sets.noCave = true;
-        for (let x1 = x * CHUNK_SIZE_3; x1 < (x + 1) * CHUNK_SIZE_3; x1++) {
-            for (let y1 = y * CHUNK_SIZE_3; y1 < (y + 1) * CHUNK_SIZE_3; y1++) {
-                for (let z1 = z * CHUNK_SIZE_3; z1 < (z + 1) * CHUNK_SIZE_3; z1++) {
-                    const sets1 = {...sets};
-                    if (map.at(x1, y1, z1) && !map.at(x1, y1, z1).temp) continue;
-                    const isCaveAir = checkAdjacent(x1, y1, z1, isCave);
-                    let caveData;
-                    if (layers[getLayer(y1, x1, z1, false)].chunks !== "3d"
+    for (let i = 0; i < empty.length; i += 3) {
+        const x1 = empty[i];
+        const y1 = empty[i + 1];
+        const z1 = empty[i + 2];
+        generateAdjacent(x1, y1, z1, {noUpdate: true});
+    }
+    
+    if (str.onGenerate !== undefined) str.onGenerate(x, y, z);
+    
+    if (str.log !== false) console.log(`Generated structure ${structure} at ${settings.centerX}, ${settings.centerY}, ${settings.centerZ} (grid: ${gridX}, ${gridY}, ${gridZ}; world: ${x}, ${y}, ${z})`);
+}
+
+function generateChunk(x, z) {
+    const sets = {noVein: true, noGeode: true, forceReplace: ["leaves", "autumnalLeaves"], surface: true};
+    const sets2 = {noVein: true, noGeode: true, forceReplace: ["leaves", "autumnalLeaves"]};
+    for (let x1 = x * CHUNK_SIZE; x1 < (x + 1) * CHUNK_SIZE; x1++) {
+        for (let z1 = z * CHUNK_SIZE; z1 < (z + 1) * CHUNK_SIZE; z1++) {
+            const y1 = topLayer(x1, z1);
+            spawnOre(x1, y1, z1, sets);
+            spawnOre(x1, y1 + 1, z1, sets);
+            let y = y1;
+            function check(y) {
+                for (const pos of [[x1 - 1, z1], [x1 + 1, z1], [x1, z1 - 1], [x1, z1 + 1]]) {
+                    if (y > topLayer(pos[0], pos[1])) return false;
+                }
+                return true;
+            }
+            while (!check(--y)) {
+                spawnOre(x1, y, z1, sets2);
+            }
+            spawnOre(x1, layers.sky.min, z1, sets);
+        }
+    }
+}
+
+function generateChunk3(x, y, z, noCave = false) { // used for places like space
+    let generatedAny = false;
+    let startTime = performance.now();
+    const sets = {};
+    // 2if (noCave) sets.noCave = true;
+    for (let x1 = x * CHUNK_SIZE_3; x1 < (x + 1) * CHUNK_SIZE_3; x1++) {
+        for (let y1 = y * CHUNK_SIZE_3; y1 < (y + 1) * CHUNK_SIZE_3; y1++) {
+            for (let z1 = z * CHUNK_SIZE_3; z1 < (z + 1) * CHUNK_SIZE_3; z1++) {
+                const sets1 = {...sets};
+                if (map.at(x1, y1, z1) && !map.at(x1, y1, z1).temp) continue;
+                const isCaveAir = checkAdjacent(x1, y1, z1, isCave);
+                let caveData;
+                if (layers[getLayer(y1, x1, z1, false)].chunks !== "3d"
                     && layers[getLayer(y1 - 1, x1, z1, false)].chunks !== "3d"
                     && layers[getLayer(y1 + 1, x1, z1, false)].chunks !== "3d"
                     && !isCaveAir
@@ -1382,7 +1420,7 @@ function spawnOre(x, y, z, settings) {
             }
         }
     }
-    
+
     return generatedAny;
 }
 
@@ -1432,18 +1470,14 @@ function loadNearbyChunks() {
             return distA - distB;
         };
         generatingChunks3.sort(dist);
-        const priority = [...priorityChunks3].filter(g => chunkToPlayer3(g) < GENERATION_DISTANCE * 4).sort(dist);
-        const prioritySet = new Set(priority);
-        generatingChunks3 = [...new Set(priority.concat(generatingChunks3))];
         let i = 0;
         let check = Math.min(generatingChunks3.length, layers[CURRENT_LAYER]?.chunkGenSpeed || CHUNK3_RATE);
         while (check > 0) {
             if (generatingChunks3.length === 0 || !generatingChunks3[i]) break;
             const [x, y, z] = generatingChunks3[i++].split("_").map(Number);
-            if (generateChunk3(x, y, z, prioritySet.has(`${x}_${y}_${z}`))) check--;
+            if (generateChunk3(x, y, z)) check--;
             else check -= 0.25;
             generatedChunks.add(`${x}_${y}_${z}`);
-            priorityChunks3.delete(`${x}_${y}_${z}`);
         }
         generatingChunks3.shift();
         
@@ -1541,7 +1575,7 @@ function setProgress(x, y, z, dontSet = false, forcedProgress, noAdd = false) {
 }
 
 function updateBreakMesh(x, y, z, pos = map.at(x, y, z), progress = pos.progress) {
-    if (ores[pos?.background]?.customModel) return;
+    if (ores[pos?.background]?.customModel || pos === undefined || ores[pos?.ore] === undefined) return;
 
     const breakState = Math.min(Math.max(Math.floor(progress * 16), 0), 15);
     let obj = breakMap.at(x, y, z);
@@ -1599,6 +1633,7 @@ function updateBreakMesh(x, y, z, pos = map.at(x, y, z), progress = pos.progress
     }
 
     if (needsRefresh) {
+        if (pos.scale === undefined) return console.warn(x, y, z, map.at(x, y, z), breakMap.at(x, y, z));
         const mesh = meshes[longID];
         mesh.thinInstanceAdd(
             BABYLON.Matrix.Scaling(pos.scale.x * 1.001, pos.scale.y * 1.001, pos.scale.z * 1.001)
@@ -1618,13 +1653,14 @@ function updateTopLeft() {
     getElementById("radiation").value = Math.max(Math.log2(player.radiation + 1), 0);
     getElementById("healthText").innerText = `${formatNum(player.health, 2)} HP`;
     getElementById("radiationText").innerText = `${formatNum(player.radiation, 3)} Rads`;
+    const debugMode = getElementById("totalOres").style.display !== "none";
     if (player.radiation > 12.5) {
         getElementById("radiation").classList.add("danger");
     } else {
         getElementById("radiation").classList.remove("danger");
     }
     getElementById("depth").innerText = `${player.position.y < 0 ? "Depth" : "Altitude"}: ${Math.abs(player.position.y).toLocaleString(undefined, {maximumFractionDigits: 1})}m (${layers[CURRENT_LAYER] ? layers[CURRENT_LAYER].name : biomes[CURRENT_LAYER] ? biomes[CURRENT_LAYER].name : "Unknown"})`;
-    getElementById("position").innerText = `Position: ${player.position.x.toLocaleString(undefined, {maximumFractionDigits: 1})}, ${(player.position.y).toLocaleString(undefined, {maximumFractionDigits: 1})}, ${player.position.z.toLocaleString(undefined, {maximumFractionDigits: 1}) === "-0" ? "0" : player.position.z.toLocaleString(undefined, {maximumFractionDigits: 1})}`.replaceAll("-0,", "0,");
+    getElementById("position").innerText = `Position: ${player.position.x.toLocaleString(undefined, {maximumFractionDigits: debugMode ? 3 : 1})}, ${(player.position.y).toLocaleString(undefined, {maximumFractionDigits: debugMode ? 3 : 1})}, ${player.position.z.toLocaleString(undefined, {maximumFractionDigits: debugMode ? 3 : 1})}`.replaceAll("-0,", "0,");
     getElementById("power").innerText = `Pickaxe Power: ${formatNum(1 / (Math.abs(player.position.y) + 1000) * 1000 * calculatePower(player.position.x, player.position.y, player.position.z))}`;
     getElementById("time").innerText = `Time: ${getTimeString()}`;
     
@@ -1807,6 +1843,49 @@ function useSelectedItem() {
     return false;
 }
 
+function itemTick() {
+    if (vars.weatherRadar) {
+        if (player.position.y > -10 && player.position.y < 1000) {
+            const weather = getBiomeNumber(player.position.x, Math.max(Math.min(player.position.y, 999), layers.sky.min), player.position.z, "rainy");
+            if (weather < -0.5) {
+                getElementById("weather").innerHTML = "Weather: Clear";
+            } else if (weather < 0) {
+                getElementById("weather").innerHTML = "Weather: Partly Cloudy";
+            } else if (weather < 0.4) {
+                getElementById("weather").innerHTML = "Weather: Cloudy";
+            } else if (weather < 0.475) {
+                getElementById("weather").innerHTML = "Weather: Drizzle";
+            } else if (weather < 0.55) {
+                getElementById("weather").innerHTML = "Weather: Light Rain";
+            } else if (weather < 0.625) {
+                getElementById("weather").innerHTML = "Weather: Rain";
+            } else if (weather < 0.7) {
+                getElementById("weather").innerHTML = "Weather: Heavy Rain";
+            } else if (weather < 0.85) {
+                getElementById("weather").innerHTML = "Weather: Thunderstorm";
+            } else if (weather < 1) {
+                getElementById("weather").innerHTML = "Weather: Severe Thunderstorm";
+            } else {
+                getElementById("weather").innerHTML = "Weather: Is the world ending?";
+            }
+            if (getTemperature(player.position.x, player.position.y, player.position.z) < 0) {
+                getElementById("weather").innerHTML = getElementById("weather").innerHTML
+                .replace("Rain", "Snow")
+                .replace("Drizzle", "Flurries")
+                .replace("Severe Thunderstorm", "Blizzard")
+                .replace("Thunderstorm", "Snowstorm");
+            }
+            getElementById("weather").innerHTML += ` (${(weather * 50 + 50).toLocaleString(undefined, {maximumFractionDigits: 1})}%)`
+            + `<br>Temperature: ${getTemperature(player.position.x, player.position.y, player.position.z).toLocaleString(undefined, {maximumFractionDigits: 2})}°C`
+            + `<br>Humidity: ${(getHumidity(player.position.x, player.position.y, player.position.z) * 50 + 50).toLocaleString(undefined, {maximumFractionDigits: 2})}%`;
+        } else {
+            getElementById("weather").innerHTML = `Weather: ---<br>Temperature: ---`;
+        }
+    } else {
+        getElementById("weather").innerHTML = "";
+    }
+}
+
 for (let i = 0; i < oreArray.length; i++) {
     const ore = oreArray[i];
 
@@ -1878,7 +1957,8 @@ engine.runRenderLoop(() => {
         ores[animatedCanvases[i]].getCanvas();
         textures[animatedCanvases[i]]?.update();
     }
-    
+
+    itemTick();
     loadNearbyChunks();
     
     for (let i = 0; i < vars.removalQueue.length; i++) {
@@ -2424,12 +2504,14 @@ engine.runRenderLoop(() => {
         } else {
             const {x, y, z, oreData} = picked;
             if (JSON.stringify(LAST_ORE.slice(0, 4)) !== JSON.stringify([x, y, z, oreData.ore])) LAST_ORE = [x, y, z, oreData.ore, hit.distance];
+
+            const block = map.at(x, y, z);
             
             if (hit.distance <= inventory.currentPickaxe.range) {
-                const oreData = ores[hit.pickedMesh.metadata?.ore], color = oreData?.color || "#fff";
+                const oreData = ores[hit.pickedMesh.metadata?.ore], color = block.color ?? oreData?.color ?? "#fff";
                 getElementById("oreName").textContent = `${oreData?.name || "Unknown"}`;
                 getElementById("tooltip").style.display = "";
-                if (color[0] === "#") {
+                if (!color.includes("gradient")) {
                     getElementById("oreName").style.color = color;
                     getElementById("oreName").style.textShadow = "";
                     getElementById("oreName").style.backgroundImage = "none";
@@ -2439,7 +2521,7 @@ engine.runRenderLoop(() => {
                     getElementById("oreName").style.backgroundImage = color;
                 }
                 
-                let chance = map.at(x, y, z).chance ?? 0;
+                let chance = block.chance ?? 0;
                 
                 if (MINING) {
                     miningTick();
@@ -2449,14 +2531,14 @@ engine.runRenderLoop(() => {
                 
                 getElementById("debugInfo").textContent = `${x}, ${y}, ${z}`;
                 if (getElementById("totalOres").style.display !== "none") {
-                    getElementById("debugInfo").innerText += `\n${map.at(x, y, z).meshID}`;
+                    getElementById("debugInfo").innerText += `\n${block.meshID}`;
+                    getElementById("debugInfo").innerText += `\n${block.index}`;
                 }
-                getElementById("oreRarity").textContent = map.at(x, y, z).placed ? `Placed by ${window.username || "you"}` : (isFinite(chance) && Math.abs(chance) !== 0 ? formatChance(chance) : "");
-                getElementById("oreRarity").style.color = tiers[ores[map.at(x, y, z).ore]?.tier]?.color ?? "#fff";
+                getElementById("oreRarity").textContent = block.placed ? `Placed by ${window.username || "you"}` : (isFinite(chance) && Math.abs(chance) !== 0 ? formatChance(chance) : "");
+                getElementById("oreRarity").style.color = tiers[ores[block.ore]?.tier]?.color ?? "#fff";
                 getElementById("oreRarity").style.display = "block";
                 
                 getElementById("oreDesc").textContent = oreData?.desc ?? "No description available.";
-                // getElementById("miningTime").innerText = formatTime((map.at(x, y, z).str) / calculatePower(x, y, z) * (1 - (map.at(x, y, z).progress || 0))).replace("Infinity", "Unbreakable") + " + " + formatTime(inventory.currentPickaxe.delay);
             } else {
                 hide();
             }

@@ -2101,8 +2101,8 @@ let ores = {
         scale: {x: 2, y: 2, z: 2},
         offset: {x: 0, y: -0.5, z: 0},
         customModel: true,
-        colorize() {
-            return `hsl(${Math.floor(Math.random() * 360)}, 100%, 50%)`;
+        colorize(settings) {
+            return settings.cssColor = `hsl(${Math.floor(Math.random() * 360)}, 100%, 50%)`;
         },
         cave: {
             floor: true // spawns on the floor of caves; not in the blocks, but on top of them
@@ -2576,7 +2576,7 @@ let ores = {
         spawnMsg: "A glitch reveals itself with an unidentifiable appearance...",
         singleLayer: true,
         excludeFromWiki: 1,
-        material: "MeshBasicMaterial",
+        disableLighting: true,
         noGeodeTexture: true,
         audio: "glitch.mp3"
     },
@@ -2727,7 +2727,7 @@ let ores = {
         sfx: "sand",
         excludeFromWiki: 1,
         forcedBackground: "noise",
-        material: "MeshBasicMaterial",
+        disableLighting: true,
         overlay: {
             distance: 25,
             maxOpacity: 0.5
@@ -2868,7 +2868,7 @@ let ores = {
         spawnMsg: "The force of a nearby singularity stretches your body to its limits...",
         excludeFromWiki: 1,
         geometry: "SphereGeometry",
-        material: "MeshBasicMaterial",
+        disableLighting: true,
         noTexture: true,
         conditionLabel: "Only spawns in cave air",
         radiation: 150,
@@ -3463,6 +3463,7 @@ let ores = {
             const data = getOre(x, y, z, {forceSpawn: true, all: true, caveExclusive: true, crystal: true, seedMod: 0.1});
             settings.properties.noCollision = true;
             settings.oreColor = true;
+            settings.chance *= data.chance;
 
             return {ore: data.ore, bg: "crystal"};
         }
@@ -4001,6 +4002,7 @@ let ores = {
         maxY: -50001,
         minY: -Infinity,
         customModel: true,
+        oreColor: true,
         excludeFromWiki: 2,
         desc: "It chains things. What'd you think it does?",
         offset: {x: 0, y: 5 / 32, z: 0},

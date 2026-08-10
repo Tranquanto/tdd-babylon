@@ -525,7 +525,7 @@ const layers = {
         caveRules: {
             noDripstone: true
         },
-        onEnter() {
+        /* onEnter() {
             const directionalLight2 = new THREE.DirectionalLight(0xffffff, 1);
             directionalLight2.position.set(0, -1, 0);
             this.directionalLight2 = directionalLight2;
@@ -543,7 +543,7 @@ const layers = {
         tick() {
             this.directionalLight3.position.applyAxisAngle(new THREE.Vector3(0, 1, 0), 0.1);
             vars.directionalLight.intensity = this.directionalLight2.intensity = Math.random() ** 0.1;
-        }
+        } */
     },
 };
 

@@ -2,7 +2,7 @@ import { seed, caveNoise, caveNoiseSmall, CAVE_SIZE, MIN_CAVE_REQ } from "./perl
 import { deathMessages } from "./content/deathMessages.js";
 
 const vars = {
-    version: "0.7.0.5a",
+    version: "pre-1.0.0a",
     lastUpdate: 1772404520, // unix timestamp of last major update. the user cannot play for 20 minutes after this time
     RARE_ORE_CHANCE_MULTIPLIER: 1,
     RARE_ORE_CHANCE_MULTIPLIER_CUTOFF: 1 / 1e4,
@@ -80,33 +80,6 @@ const vars = {
             }, 16);
         }
     },
-    settings: {
-        sensitivity: Number(localStorage.getItem("sensitivity") || 1),
-        music: Number(localStorage.getItem("music") || 0.25),
-        oreSound: Number(localStorage.getItem("oreSound") || 1),
-        maxLights: Number(localStorage.getItem("maxLights") || 10),
-        resolutionScale: Number(localStorage.getItem("resolutionScale") || 1),
-        shadowMapSize: Number(localStorage.getItem("shadowMapSize") || 2048)
-    },
-    stats: {
-        update() {
-            localStorage.setItem("tdd-stats", JSON.stringify(vars.stats));
-        },
-        totalOresMined: 0,
-        lowestRNG: 0, // rarest find (1 in X chance)
-        lowestOreRNG: 0, // rarest ore find (1 in X chance; excludes veins, geodes, and the like)
-        oresMined: {}, // oreID: count
-        itemsUsed: {}, // itemID: count
-        toolsUsed: {}, // toolID: count (this is for blocks broken with that item, but still functionally the same as itemsUsed (i.e., any item can be used as a tool))
-        cavesGenerated: 0,
-        totalCaveVolume: 0,
-        layersVisited: {},
-        largestVein: 0,
-        largestGeode: 0,
-        dailyStreak: 0,
-        maxDailyStreak: 0,
-        totalPlaytime: 0
-    },
     currentDate: Math.floor(Date.now() / 86400000) - Math.floor(new Date(2025, 0, 0) / 86400000),
     startActiveTime: performance.now(),
     startIdleTime: performance.now(),
@@ -131,4 +104,44 @@ const vars = {
     lightRayRotation: 0.1,
     setFogColor() {} // will be set after scripts load
 };
+
+let localStorageExists = true;
+try {
+    localStorage;
+} catch (e) {
+    localStorageExists = false;
+}
+
+if (localStorageExists) {
+    Object.assign(vars, {
+        settings: {
+            sensitivity: Number(localStorage.getItem("sensitivity") || 1),
+            music: Number(localStorage.getItem("music") || 0.25),
+            oreSound: Number(localStorage.getItem("oreSound") || 1),
+            maxLights: Number(localStorage.getItem("maxLights") || 10),
+            resolutionScale: Number(localStorage.getItem("resolutionScale") || 1),
+            shadowMapSize: Number(localStorage.getItem("shadowMapSize") || 2048)
+        },
+        stats: {
+            update() {
+                localStorage.setItem("tdd-stats", JSON.stringify(vars.stats));
+            },
+            totalOresMined: 0,
+            lowestRNG: 0, // rarest find (1 in X chance)
+            lowestOreRNG: 0, // rarest ore find (1 in X chance; excludes veins, geodes, and the like)
+            oresMined: {}, // oreID: count
+            itemsUsed: {}, // itemID: count
+            toolsUsed: {}, // toolID: count (this is for blocks broken with that item, but still functionally the same as itemsUsed (i.e., any item can be used as a tool))
+            cavesGenerated: 0,
+            totalCaveVolume: 0,
+            layersVisited: {},
+            largestVein: 0,
+            largestGeode: 0,
+            dailyStreak: 0,
+            maxDailyStreak: 0,
+            totalPlaytime: 0
+        }
+    });
+}
+
 export default vars;

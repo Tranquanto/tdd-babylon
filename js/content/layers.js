@@ -14,6 +14,8 @@ import {
     caveNoise,
     deepSpaceNoise
 } from "../perlin.js";
+import { getColor, lerpColor } from "../getColor.js";
+import vars from "../vars.js";
 
 export const maxHeight = 150, minHeight = 0;
 const worldHeight = (maxHeight - minHeight) / 2;
@@ -24,10 +26,6 @@ export function topLayer(x, z, noFloor = false) {
     const mountain = Math.max(heightMapMountain.noise(x / 25, 0, z / 25), 0) * worldHeight * Math.max(heightMapMountainLarge.noise(x / 125, 0, z / 125), 0);
     const a = (small + large + mountain);
     return (noFloor ? a : Math.floor(a)) + worldHeight + minHeight;
-}
-
-let vars = {
-    particleQueue: []
 }
 
 const layers = {
@@ -425,7 +423,7 @@ const layers = {
         max: -12000,
         min: -13000,
         lighting: {color: "#fff", intensity: 0.3},
-        fog: Infinity,
+        fog: 3000,
         fogColor: "#000",
         color: "#0f0",
         hue: 0,
@@ -616,17 +614,18 @@ const biomes = {
         stormTick() {
             const zap = (brightness, iteration) => {
                 this.lastLightning = Date.now();
-                vars.setFogColor(new THREE.Color(this.fogColor).lerp(new THREE.Color(0xbadaff), brightness));
+                vars.setFogColor(lerpColor(this.fogColor, "#badaff", brightness));
                 vars.directionalLight.intensity = (brightness * 4) ** 2;
-                vars.directionalLight.position.set(Math.random(), Math.random(), Math.random()).normalize().multiplyScalar(1000);
+                vars.directionalLight.direction.set(Math.random(), Math.random(), Math.random()).normalize();
                 setTimeout(() => {
                     vars.setFogColor(this.fogColor);
                     vars.directionalLight.intensity = 0;
                 }, 50);
                 if (iteration === 0) {
                     const audio = new Audio(Math.random() > 0.5 ? "audio/thunder.mp3" : "audio/thunder-2.mp3");
-                    audio.volume = brightness * 0.5;
+                    audio.volume = brightness / 8;
                     audio.playbackRate = Math.random() * 0.4 + 0.8;
+                    audio.preservesPitch = false;
                     audio.play().catch(() => {
                         console.warn("Failed to play thunder sound");
                     });
@@ -638,7 +637,7 @@ const biomes = {
                 }
             }
             if (Math.random() < 0.003 && Date.now() - this.lastLightning > 3000) {
-                zap(Math.random() * 0.6 + 0.4, 0);
+                zap(Math.random() * 2.4 + 1.6, 0);
             }
         }
     },
@@ -809,6 +808,16 @@ const biomes = {
         fog: 50,
         fogColor: "#0000ff",
         music: "Tranquanto - Error"
+    },
+    moss: {
+        name: "Moss",
+        maxY: minHeight,
+        minY: -7000,
+        size: 200,
+        requirement(x, y, z) {
+            return getBiomeNumber(x, y, z, "moss") >= 0.35;
+        },
+        cosmetic: true
     }
 };
 
@@ -826,7 +835,7 @@ for (const l in layers) layers[l].id = l;
 for (const b in biomes) biomes[b].id = b;
 
 export const layerArray = Array.from(Object.keys(layers), k => layers[k]);
-export const biomeArray = Array.from(Object.keys(biomes), k => biomes[k]);
+export const biomeArray = Array.from(Object.keys(biomes).filter(b => !biomes[b].cosmetic), k => biomes[k]);
 
 const layerCache = {};
 export function getLayer(y, x, z, includeBiomes = true) {
@@ -878,7 +887,7 @@ export function getHumidity(x, _y, z) {
     // -1 = dry, 0 = neutral, 1 = wet
     const TEMPERATURE_INTERVAL = BIOME_INTERVAL * 11;
     let y2 = 0;
-    let base = humidityNoise.noise(x / TEMPERATURE_INTERVAL, y2 / TEMPERATURE_INTERVAL, z / TEMPERATURE_INTERVAL) * 1.35;
+    let base = humidityNoise.noise(x / TEMPERATURE_INTERVAL, y2 / TEMPERATURE_INTERVAL, z / TEMPERATURE_INTERVAL) * 1.6;
 
     base = Math.min(1, Math.max(-1, base));
 

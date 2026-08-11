@@ -115,22 +115,22 @@ self.addEventListener("message", e => {
         if (caveFloor && rand01(...pos, seed + Math.E * 3) < 0.05 && check(pos[0], pos[1] - 1, pos[2])) {
             let size = 10;
             let y = pos[1];
-            while (emptySet.has(`${pos[0]}_${y}_${pos[2]}`) && size > 0) {
+            while (emptySet.has(`${pos[0]}_${y}_${pos[2]}`) && size > 2) {
                 if (rand01(pos[0], y, pos[2], seed + Math.E * 4) < 0.2) break;
                 size -= 2;
 
-                dripstones[`${pos[0]}_${y}_${pos[2]}`] = size / 10;
+                dripstones[`${pos[0]}_${y}_${pos[2]}`] = {size: size / 10, source: [pos[0], pos[1] - 1, pos[2]]};
                 dripstoneArr.push([pos[0], y, pos[2]]);
                 y++;
             }
         } else if (caveCeiling && rand01(...pos, seed + Math.E * 3) < 0.05 && check(pos[0], pos[1] + 1, pos[2])) {
             let size = 10;
             let y = pos[1];
-            while (emptySet.has(`${pos[0]}_${y}_${pos[2]}`) && size > 0) {
+            while (emptySet.has(`${pos[0]}_${y}_${pos[2]}`) && size > 2) {
                 if (rand01(pos[0], y, pos[2], seed + Math.E * 4) < 0.2) break;
                 size -= 2;
 
-                dripstones[`${pos[0]}_${y}_${pos[2]}`] = size / 10;
+                dripstones[`${pos[0]}_${y}_${pos[2]}`] = {size: size / 10, source: [pos[0], pos[1] + 1, pos[2]]};
                 dripstoneArr.push([pos[0], y, pos[2]]);
                 y--;
             }

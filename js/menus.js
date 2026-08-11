@@ -153,7 +153,7 @@ document.getElementById("dpad-fullscreen").addEventListener("click", () => {
 });
 
 if (location.origin.includes("localhost")) {
-    document.getElementById("dpad-console").style.display = "block";
+    document.getElementById("dpad-console").style.display = "inline-flex";
     document.getElementById("dpad-console").addEventListener("click", () => {
         document.dispatchEvent(new KeyboardEvent('keydown', {code: 'F2'}));
     });

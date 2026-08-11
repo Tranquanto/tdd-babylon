@@ -18,8 +18,9 @@ const replacedIds = { // for items that have been renamed; note: this will be re
 };
 
 import vars from "../vars.js";
-import { getOre, map, airAt, getColor } from "../outside_stuff.js";
+import { getOre, map, airAt } from "../outside_stuff.js";
 import { PerlinNoise, rand01 } from "../perlin.js";
+import { getColor } from "../getColor.js";
 
 import {
     layers,
@@ -329,7 +330,8 @@ let ores = {
             height: {
                 min: 3,
                 max: 6
-            }
+            },
+            allowTransparent: true
         },
         singleLayer: true, // single-layered texture
         desc: "Comes from the trunks of trees.",
@@ -368,7 +370,6 @@ let ores = {
         minY: 0,
         str: 0.1,
         textureHasTransparency: true, // to prevent things underneath from not rendering
-        allowTransparent: true,
         noGeode: true,
         noCollision: true,
         desc: "The foliage that grows on trees.",
@@ -386,7 +387,6 @@ let ores = {
         minY: 0,
         str: 0.1,
         textureHasTransparency: true,
-        allowTransparent: true,
         noGeode: true,
         noCollision: true,
         desc: "The foliage that grows on trees in autumn.",
@@ -594,7 +594,8 @@ let ores = {
         str: 0.5,
         singleLayer: true,
         desc: "An organic mixture found along the surface.",
-        sfx: "sand"
+        sfx: "sand",
+        noDripstone: true
     },
     sand: {
         name: "Sand",
@@ -910,6 +911,7 @@ let ores = {
         minY: -7000,
         str: 2.5,
         singleLayer: true,
+        noRandomRotation: true,
         priority: 2,
         desc: "A honeycomb filled with bees. Careful!",
         sfx: "wood",
@@ -1209,10 +1211,15 @@ let ores = {
     moss: {
         name: "Moss",
         color: "#2b750e",
-        chance: 0,
-        includeInOreArray: true,
+        chance: Infinity,
         maxY: -1,
-        minY: -9000,
+        minY: -7000,
+        condition(x, y, z) {
+            return biomes.moss.requirement(x, y, z);
+        },
+        conditionLabel: "Filler block of moss caves",
+        priority: 2,
+        caveExclusive: true,
         str(_x, y) {
             if (y < -7000) return 3.2;
             return 0.4;
@@ -1223,14 +1230,13 @@ let ores = {
         noVein: true,
         noGeode: true,
         forcedBG: true,
-        excludeFromWiki: 0,
         customTexture: {
             ore: "grass",
             item: {
                 src: "moss"
             }
         },
-        conditionLabel: "Filler block of moss caves",
+        noDripstone: true,
         sfx: "grass"
     },
     vine: {
@@ -1238,7 +1244,7 @@ let ores = {
         color: "#2b750e",
         chance: 1 / 12,
         maxY: -1,
-        minY: -Infinity,
+        minY: -7000,
         str: 0.4,
         singleLayer: true,
         desc: "A plant that hangs from the ceilings of mossy caves.",
@@ -1252,7 +1258,9 @@ let ores = {
         cave: {
             ceiling: true
         },
-        condition: (_x, _y, _z, settings) => settings.caveType === "moss",
+        condition(x, y, z) {
+            return biomes.moss.requirement(x, y + 1, z);
+        },
         sfx: "grass"
     },
     barrier: {
@@ -1720,8 +1728,8 @@ let ores = {
             size: 0.06,
             color: "#f80"
         },
-        condition(_x, _y, _z, settings) {
-            return settings.caveType === "normal";
+        condition(x, y, z) {
+            return !biomes.moss.requirement(x, y, z);
         }
     },
     ash: {
@@ -2078,6 +2086,26 @@ let ores = {
             col: "#c689ff",
             str: 0.9
         }
+    },
+    aquamarine: {
+        name: "Aquamarine",
+        color: "linear-gradient(to right, #007c8f, #00ddff, #007c8f)",
+        firstColor: "#00ddff",
+        chance: {max: 1 / 46000, min: 1 / 3210},
+        easing: {
+            type: "out",
+            exponent: 2
+        },
+        maxY: -5001,
+        minY: -6000,
+        str: 53,
+        desc: "Left behind by an aquatic dragon, this gemstone glistens with a soft blue glow.",
+        light: {
+            col: "#00ddff",
+            str: 1.2
+        },
+        emissive: {str: 0.2},
+        excludeFromWiki: 1
     },
     soap: {
         name: "Soap",
@@ -3178,7 +3206,7 @@ let ores = {
                         const arcZ = Math.sin(time + i * Math.PI / 6.125) * 2; // wavy
                         
                         const hue = ((i / 49) * 360 + time * 30) % 360;
-                        const color = new THREE.Color(`hsl(${hue}, 100%, 60%)`);
+                        const color = getColor(`hsl(${hue}, 100%, 60%)`);
                         
                         vars.particleQueue.push({
                             x: x + arcX,
@@ -3422,8 +3450,8 @@ let ores = {
         tier: "bizarre",
         spawnMsg: "A verdant catalyst expands lush vegetation through the caverns...",
         caveExclusive: true,
-        condition(_x, _y, _z, settings) {
-            return settings.caveType === "moss";
+        condition(x, y, z) {
+            return biomes.moss.requirement(x, y, z);
         },
         conditionLabel: "Only spawns in moss caves",
         light: {
@@ -4194,7 +4222,6 @@ let ores = {
     bush: {
         name: "Bush",
         placeholder: true,
-        log: false,
         chance: 1 / 50,
         maxY: -6001,
         minY: -7000,
@@ -4202,7 +4229,7 @@ let ores = {
             floor: true
         },
         onGenerate(x, y, z) {
-            vars.structureQueue.push([x, y, z, "bush", {absPos: true, forced: true}]);
+            vars.structureQueue.push([x, y, z, "bush", {absPos: true, forced: true, allowOverride: true, exclude: ["bush"]}]);
         }
     }
 };
@@ -4762,12 +4789,15 @@ let items = {
         onUse() {
             const {intersect} = vars;
             if (intersect && intersect.distance <= vars.inventory.currentPickaxe.range) {
-                const mesh = intersect.object;
+                const mesh = intersect.pickedMesh;
 
                 if (mesh instanceof BABYLON.Mesh && mesh.metadata.type === "ore") {
-                    const index = intersect.instanceId;
-                    mesh.setColorAt(index, getColor(Math.floor(Math.random() * 2 ** 24)));
-                    mesh.instanceColor.needsUpdate = true;
+                    const index = intersect.thinInstanceIndex;
+                    mesh.metadata.thinInstanceColors[index * 4 + 0] = Math.random();
+                    mesh.metadata.thinInstanceColors[index * 4 + 1] = Math.random();
+                    mesh.metadata.thinInstanceColors[index * 4 + 2] = Math.random();
+                    mesh.metadata.thinInstanceColors[index * 4 + 3] = 1;
+                    mesh.thinInstanceSetBuffer("color", new Float32Array(mesh.metadata.thinInstanceColors), 4);
                 }
             }
         }
@@ -4775,13 +4805,13 @@ let items = {
     convertinator: {
         name: "Convertinator",
         desc: "Rerolls the ore you are looking at into another random ore.",
-        color: "#ff69b4",
+        color: "#1e6e1e",
         tags: ["pickaxe"],
         power: 26,
         range: 7,
         delay: 0.5,
         onMine(x, y, z) {
-            vars.spawnQueue.push([x, y, z, {noUpdate: true, forced: true}]);
+            vars.spawnQueue.push([x, y, z, {noUpdate: true, forced: true, trueRandom: true}]);
             vars.miningStartTime = performance.now() + vars.inventory.currentPickaxe.delay * 1000;
         }
     },
@@ -5195,6 +5225,11 @@ let recipes = [
         output: {id: "unfaithfulPickaxe", count: 1},
         required: [{id: "darkGem", count: 1}]
     }, */
+    {
+        input: [{id: "iron", count: 330}, {id: "pizzaziumInfinionite", count: 65}, {id: "tugtupite", count: 8}, {id: "aquamarine", count: 40}, {id: "emerald", count: 120}, {id: "malachite", count: 12}],
+        output: {id: "convertinator", count: 1},
+        required: [{id: "pizzaziumInfinionite", count: 1}, {id: "tugtupite", count: 1}, {id: "aquamarine", count: 1}]
+    },
 
     // components
     {
@@ -5489,7 +5524,8 @@ let structures = {
     bush: {
         chance: 0, // only spawned by "bush" placeholder ore
         maxY: -6000,
-        minY: -7000
+        minY: -7000,
+        log: false
     },
     frostburnFacility: {
         chance: 1 / 16,
@@ -5872,7 +5908,7 @@ let achievements = {
     },
     doofenshmirtzsFavorite: {
         name: "Doofenshmirtz's Favorite",
-        desc: "Craft and use a Convertinator.",
+        desc: "Use a Convertinator.",
         icon: "convertinator",
         progress() {
             return stats.toolsUsed.convertinator;

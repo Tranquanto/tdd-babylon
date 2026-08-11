@@ -584,7 +584,7 @@ ores.wood.condition = (x, y, z) => {
     return ores.wood.clayCondition(x, y, z) * (biomes.snowy.requirement(x, y, z) ? 0.25 : 1);
 }
 ores.onyx.condition = (x, y, z) => {
-    return ores.sandstone.chance[0].condition(x, y, z) && y > topLayer(x, z);
+    return ores.sandstone.chance[0].condition(x, y, z) && y < topLayer(x, z);
 }
 
 ores.unnamed5.tick = (x, y, z) => {

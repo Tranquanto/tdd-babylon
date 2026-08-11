@@ -1,10 +1,11 @@
 import vars from "./vars.js";
-import { getOre, map, oreAt, checkAdjacent, calculatePower, airAt, calculateRarity, chunks, getBGOre, getColor, breakMap, k } from "./outside_stuff.js";
+import { getOre, map, oreAt, checkAdjacent, calculatePower, airAt, calculateRarity, chunks, getBGOre, breakMap, k } from "./outside_stuff.js";
 import { getLayer, items, layers, locations, oreArray, ores, structureArray, structures, tiers, traits, sfxOptions } from "./content/items.js";
 import { biomes, getBiomeNumber, getHumidity, getTemperature, topLayer } from "./content/layers.js";
 import { isCave, CHUNK3_RATE, CHUNK_SIZE_3, CHUNK_SIZE, noise, isCaveFloor, isCaveCeiling } from "./noise.js";
 import { inventory, toggleInventory, unlockAchievement } from "./inventory.js";
 import { rand01 } from "./perlin.js";
+import { getColor } from "./getColor.js";
 
 const { player, stats, camera } = vars;
 
@@ -12,7 +13,8 @@ const canvas = getElementById("canvas");
 
 const textures = {}, animatedCanvases = [];
 const meshes = {}, meshesNeedingUpdate = new Set();
-let meshCounts = {};
+const audios = [];
+const meshCounts = {};
 const MAX_MESH_COUNT = 1024, MESH_CHUNK_SIZE = 128;
 let STARTED = true;
 let LAST_FRAME = performance.now(); // for FPS calculation
@@ -101,20 +103,19 @@ const keys = {
     right: false,
     jump: false
 };
+
+// mouse controls
 canvas.addEventListener("click", () => {
     canvas.requestPointerLock({unadjustedMovement: true});
 });
 canvas.addEventListener("mousemove", e => {
+    vars.startIdleTime = performance.now();
     if (document.pointerLockElement === canvas) {
         perspectiveCamera.rotation.y += e.movementX * -0.0015 * vars.settings.sensitivity;
         perspectiveCamera.rotation.x += e.movementY * 0.0015 * vars.settings.sensitivity;
     }
     perspectiveCamera.rotation.x = Math.max(-Math.PI / 2, Math.min(Math.PI / 2, perspectiveCamera.rotation.x));
-    if (perspectiveCamera.rotation.x > Math.PI / 2 - 0.00001) {
-        perspectiveCamera.rotation.x = Math.PI / 2 - 0.00001;
-    } else if (perspectiveCamera.rotation.x < -Math.PI / 2 + 0.00001) {
-        perspectiveCamera.rotation.x = -Math.PI / 2 + 0.00001;
-    }
+    fixRotation();
 });
 canvas.addEventListener("wheel", e => {
     if (document.pointerLockElement === canvas) {
@@ -125,26 +126,191 @@ canvas.addEventListener("wheel", e => {
         }
     }
 });
+
+// touch controls
+function prevent(e) {
+    vars.startIdleTime = performance.now();
+}
+
+document.addEventListener("touchstart", prevent);
+document.addEventListener("touchmove", prevent);
+document.addEventListener("touchend", prevent);
+document.addEventListener("touchcancel", prevent);
+
+getElementById("dpad-up").addEventListener("touchstart", e => {
+    e.preventDefault();
+    keys.forward = true;
+});
+getElementById("dpad-up").addEventListener("touchend", e => {
+    e.preventDefault();
+    keys.forward = false;
+});
+getElementById("dpad-down").addEventListener("touchstart", e => {
+    e.preventDefault();
+    keys.backward = true;
+});
+getElementById("dpad-down").addEventListener("touchend", e => {
+    e.preventDefault();
+    keys.backward = false;
+});
+getElementById("dpad-left").addEventListener("touchstart", e => {
+    e.preventDefault();
+    keys.left = true;
+});
+getElementById("dpad-left").addEventListener("touchend", e => {
+    e.preventDefault();
+    keys.left = false;
+});
+getElementById("dpad-right").addEventListener("touchstart", e => {
+    e.preventDefault();
+    keys.right = true;
+});
+getElementById("dpad-right").addEventListener("touchend", e => {
+    e.preventDefault();
+    keys.right = false;
+});
+getElementById("dpad-jump").addEventListener("touchstart", e => {
+    e.preventDefault();
+    keys.jump = true;
+});
+getElementById("dpad-jump").addEventListener("touchend", e => {
+    e.preventDefault();
+    keys.jump = false;
+});
+getElementById("pause-button").addEventListener("click", () => {
+    pause();
+});
+getElementById("dpad-inventory").addEventListener("click", () => {
+    toggleInventory();
+});
+
+function setupTouchControls() {
+    let MINING_FINGER = -1;
+    let MINING_TIMEOUT;
+    let MINING_TIMEOUT_ACTIVE = false;
+
+    let totalTouchMove = 0;
+    let lastTouchX = 0;
+    let lastTouchY = 0;
+    let cameraRotation = new BABYLON.Vector3();
+    canvas.addEventListener("touchstart", e => {
+        for (let i = 0; i < e.touches.length; i++) {
+            const touch = e.touches[i];
+            if (touch.target.id !== "canvas") continue;
+            lastTouchX = touch.clientX;
+            lastTouchY = touch.clientY;
+            
+            totalTouchMove = 0;
+            MINING_TIMEOUT = setTimeout(() => {
+                if (!MINING) {
+                    MINING = true;
+                    vars.miningStartTime = performance.now();
+                    MINING_FINGER = touch.identifier;
+                }
+            }, Math.max(inventory.currentPickaxe.delay * 1000, 200));
+            MINING_TIMEOUT_ACTIVE = true;
+            break;
+        }
+
+        getElementById("dpad").style.display = "";
+        closeGUIs();
+    });
+
+    canvas.addEventListener("touchmove", e => {
+        if (e.touches.length > 0) {
+            for (let i = 0; i < e.touches.length; i++) {
+                const touch = e.touches[i];
+                if (touch.target.id !== "canvas") continue;
+                const touchX = touch.clientX;
+                const touchY = touch.clientY;
+                const deltaX = touchX - lastTouchX;
+                const deltaY = touchY - lastTouchY;
+
+                totalTouchMove += Math.sqrt(deltaX ** 2 + deltaY ** 2);
+                if (totalTouchMove > 10) {
+                    clearTimeout(MINING_TIMEOUT);
+                    MINING_TIMEOUT_ACTIVE = false;
+                }
+
+                cameraRotation.y -= deltaX * 0.01 * (vars.sensitivity || 1);
+                cameraRotation.x += deltaY * 0.01 * (vars.sensitivity || 1);
+                cameraRotation.x = Math.max(-Math.PI / 2, Math.min(Math.PI / 2, cameraRotation.x));
+
+                perspectiveCamera.rotation.copyFrom(cameraRotation);
+
+                fixRotation();
+
+                lastTouchX = touchX;
+                lastTouchY = touchY;
+                break;
+            }
+        }
+    });
+
+    canvas.addEventListener("touchend", e => {
+        clearTimeout(MINING_TIMEOUT);
+        if (MINING) {
+            if (e.touches.length === 0 || !Array.from(e.touches).some(touch => touch.identifier === MINING_FINGER)) {
+                MINING = false;
+                const x = CURRENT_ORE[0], y = CURRENT_ORE[1], z = CURRENT_ORE[2];
+                if (map.at(x, y, z) && oreAt(x, y, z)) {
+                    if (vars.miningStartTime < performance.now()) map.at(x, y, z).progress = setProgress(x, y, z);
+                }
+                vars.miningStartTime = undefined;
+                getElementById("mining-progress").style.display = "none";
+                getElementById("miningTime").style.display = "none";
+            }
+        }
+        if (MINING_TIMEOUT_ACTIVE) {
+            e.preventDefault();
+            rightClick();
+        }
+        MINING_TIMEOUT_ACTIVE = false;
+    });
+}
+
+setupTouchControls();
+
+function closeGUIs() {
+    getElementById("big-gui").style.display = "none";
+    getElementById("ore-wiki").style.display = "none";
+    getElementById("large-inventory").style.display = "none";
+    getElementById("ore-wiki-list").style.display = "none";
+    getElementById("item-wiki-list").style.display = "none";
+    getElementById("layer-wiki-list").style.display = "none";
+    getElementById("biome-wiki-list").style.display = "none";
+    getElementById("achievements-list").style.display = "none";
+}
+
+function fixRotation() {
+    if (perspectiveCamera.rotation.x > Math.PI / 2 - 0.00001) {
+        perspectiveCamera.rotation.x = Math.PI / 2 - 0.00001;
+    } else if (perspectiveCamera.rotation.x < -Math.PI / 2 + 0.00001) {
+        perspectiveCamera.rotation.x = -Math.PI / 2 + 0.00001;
+    }
+}
+
 document.addEventListener("keydown", event => {
+    vars.startIdleTime = performance.now();
     switch (event.code) {
         case 'ArrowUp':
         case 'KeyW':
-        keys['forward'] = true;
+        keys.forward = true;
         break;
         case 'ArrowDown':
         case 'KeyS':
-        keys['backward'] = true;
+        keys.backward = true;
         break;
         case 'ArrowLeft':
         case 'KeyA':
-        keys['left'] = true;
+        keys.left = true;
         break;
         case 'ArrowRight':
         case 'KeyD':
-        keys['right'] = true;
+        keys.right = true;
         break;
         case 'Space':
-        keys['jump'] = true;
+        keys.jump = true;
         break;
         case 'KeyE':
         toggleInventory();
@@ -237,26 +403,27 @@ document.addEventListener('keyup', event => {
     switch (event.code) {
         case 'ArrowUp':
         case 'KeyW':
-        keys['forward'] = false;
+        keys.forward = false;
         break;
         case 'ArrowDown':
         case 'KeyS':
-        keys['backward'] = false;
+        keys.backward = false;
         break;
         case 'ArrowLeft':
         case 'KeyA':
-        keys['left'] = false;
+        keys.left = false;
         break;
         case 'ArrowRight':
         case 'KeyD':
-        keys['right'] = false;
+        keys.right = false;
         break;
         case 'Space':
-        keys['jump'] = false;
+        keys.jump = false;
         break;
     }
 });
 document.addEventListener("mousedown", e => {
+    getElementById("dpad").style.display = "none";
     vars.startIdleTime = performance.now();
     if (e.button === 0) {
         // mine the nearest block using the raycaster
@@ -300,6 +467,8 @@ scene.ambientColor = new BABYLON.Color3(0.01, 0.01, 0.01);
 const hemisphereLight = new BABYLON.HemisphericLight("hemisphereLight", new BABYLON.Vector3(0, 1, 0), scene);
 const directionalLight = new BABYLON.DirectionalLight("directionalLight", new BABYLON.Vector3(-0.5, -2, -1), scene);
 const cameraLight = new BABYLON.PointLight("cameraLight", perspectiveCamera.position, scene);
+
+vars.directionalLight = directionalLight;
 
 const sun = new BABYLON.CreateSphere("sun", {diameter: 10}, scene);
 const sunMaterial = new BABYLON.StandardMaterial("sunMaterial", scene);
@@ -529,7 +698,7 @@ export async function generateOre(x, y, z, ore, bg, settings) {
             settings.rotation = { x: 0, y: Math.floor(Math.random() * 4) * Math.PI / 2, z: 0 };
             if (ores[ore]) {
                 if (ores[ore].rotation) settings.rotation = JSON.parse(JSON.stringify(ores[ore].rotation));
-                else if (ores[ore].noRandomRotation) settings.rotation.y = 0;
+                else if (ores[ore].noRandomRotation || ores[bg].noRandomRotation) settings.rotation.y = 0;
             }
         }
     }
@@ -582,7 +751,11 @@ export async function generateOre(x, y, z, ore, bg, settings) {
             oreMaterial.specularColor = new BABYLON.Color3(0.01, 0.01, 0.01);
             oreMaterial.specularPower = 0;
 
-            oreMaterial.albedoTexture = oreMesh.material.albedoTexture;
+            if (ores[ore].singleLayer) {
+                oreMaterial.albedoTexture = getTexture(ore);
+            } else {
+                oreMaterial.albedoTexture = oreMesh.material.albedoTexture;
+            }
 
             if (ores[ore]?.emissive) {
                 oreMaterial.emissiveColor = color;
@@ -752,30 +925,24 @@ export async function generateOre(x, y, z, ore, bg, settings) {
     } else if (meshes[`${meshID}_${count}`] === true) return false;
     
     // create an instance of the mesh for better performance
-    if (USE_THIN_INSTANCES) {
-        const matrix = BABYLON.Matrix.Scaling(settings.scale.x, settings.scale.y, settings.scale.z)
-        .multiply(BABYLON.Matrix.Translation(settings.offset.x, settings.offset.y, settings.offset.z))
-        .multiply(BABYLON.Matrix.RotationYawPitchRoll(settings.rotation.y, settings.rotation.x, settings.rotation.z))
-        .multiply(BABYLON.Matrix.Translation(x - chunkSplit[0], y - chunkSplit[1], z - chunkSplit[2]));
-        meshes[`${meshID}_${count}`].thinInstanceAdd(matrix, settings.forceUpdate);
-        const index = meshes[`${meshID}_${count}`].thinInstanceCount - 1;
-        meshes[`${meshID}_${count}`].metadata.coords[index] = {x, y, z};
-        
-        meshesNeedingUpdate.add(`${meshID}_${count}`);
-        
-        /** @type {BABYLON.Mesh} */
-        const mesh = meshes[`${meshID}_${count}`];
-        mesh.metadata.thinInstanceColors ??= [];
-        mesh.metadata.thinInstanceColors[index * 4 + 0] = color.r;
-        mesh.metadata.thinInstanceColors[index * 4 + 1] = color.g;
-        mesh.metadata.thinInstanceColors[index * 4 + 2] = color.b;
-        mesh.metadata.thinInstanceColors[index * 4 + 3] = 1;
-        mesh.thinInstanceSetBuffer("color", new Float32Array(mesh.metadata.thinInstanceColors), 4);
-    } else {
-        const instance = meshes[`${meshID}_${count}`].createInstance(`${meshID}_${count}`);
-        instance.position = new BABYLON.Vector3(x, y, z);
-        instance.metadata = {ore, background: bg, coords: {x, y, z}};
-    }
+    const matrix = BABYLON.Matrix.Scaling(settings.scale.x, settings.scale.y, settings.scale.z)
+    .multiply(BABYLON.Matrix.Translation(settings.offset.x, settings.offset.y, settings.offset.z))
+    .multiply(BABYLON.Matrix.RotationYawPitchRoll(settings.rotation.y, settings.rotation.x, settings.rotation.z))
+    .multiply(BABYLON.Matrix.Translation(x - chunkSplit[0], y - chunkSplit[1], z - chunkSplit[2]));
+    meshes[`${meshID}_${count}`].thinInstanceAdd(matrix, settings.forceUpdate);
+    const index = meshes[`${meshID}_${count}`].thinInstanceCount - 1;
+    meshes[`${meshID}_${count}`].metadata.coords[index] = {x, y, z};
+    
+    meshesNeedingUpdate.add(`${meshID}_${count}`);
+    
+    /** @type {BABYLON.Mesh} */
+    const mesh = meshes[`${meshID}_${count}`];
+    mesh.metadata.thinInstanceColors ??= [];
+    mesh.metadata.thinInstanceColors[index * 4 + 0] = color.r;
+    mesh.metadata.thinInstanceColors[index * 4 + 1] = color.g;
+    mesh.metadata.thinInstanceColors[index * 4 + 2] = color.b;
+    mesh.metadata.thinInstanceColors[index * 4 + 3] = 1;
+    mesh.thinInstanceSetBuffer("color", new Float32Array(mesh.metadata.thinInstanceColors), 4);
     
     let bounds = new BABYLON.Vector3(
         settings.scale.x * (ores[ore].boundingBox?.x || 1),
@@ -805,7 +972,7 @@ export async function generateOre(x, y, z, ore, bg, settings) {
     Object.assign(map.at(x, y, z), settings.properties);
     totalOres++;
 
-    if (ores[ore].textureHasTransparency && !ores[ore].allowTransparent || ores[ore].forceAdjacent) {
+    if (ores[ore].textureHasTransparency && !settings.allowTransparent && !ores[ore].allowTransparent || ores[ore].forceAdjacent) {
         generateAdjacent(x, y, z, {noCave: settings.noCave, caveExclusive: settings.caveExclusive});
     }
     
@@ -845,6 +1012,28 @@ export async function generateOre(x, y, z, ore, bg, settings) {
         // pointLight.position.subtractInPlace(container.position);
         
         container.addLight(pointLight);
+    }
+
+    if (ores[ore].audio) {
+        const audioNode = new BABYLON.TransformNode(`audioNode0-${x}_${y}_${z}`, scene);
+        audioNode.position.copyFrom(matrix.getTranslation()).addInPlace(new BABYLON.Vector3(...chunkSplit));
+        audioNode.rotate(BABYLON.Vector3.Up(), Math.PI);
+        
+        new BABYLON.CreateAudioEngineAsync({disableDefaultUI: true}).then(audioEngine => {
+            BABYLON.CreateSoundAsync(`audio0-${x}_${y}_${z}`, `audio/ore/${ores[ore].audio}`, {spatialEnabled: true}).then(sound => {
+                audioEngine.unlockAsync().then(() => {
+                    sound.loop = true;
+                    sound.spatial.minDistance = 1;
+                    sound.spatial.maxDistance = 20;
+                    sound.spatial.distanceModel = "linear";
+                    sound.spatial.attach(audioNode);
+                    sound.spatial.panningModel = "HRTF";
+                    sound.play();
+                    
+                    audios.push({audioEngine, sound});
+                });
+            });
+        });
     }
     
     if (ores[ore]?.onGenerate) ores[ore].onGenerate(x, y, z, settings, map.at(x, y, z));
@@ -913,11 +1102,6 @@ function removeOre(x, y, z, settings = {}) {
                     }
                     
                     // remove any audio and light associated with this ore
-                    /* const audio = scene.getObjectByName(`audio-${x}-${y}-${z}`);
-                    if (audio) {
-                    audio.stop();
-                    scene.remove(audio);
-                    } */
                     const light = lightArr.find(l => l.name === `light0-${x}-${y}-${z}`);
                     if (light !== undefined) {
                         const idx = lightArr.indexOf(light);
@@ -932,6 +1116,13 @@ function removeOre(x, y, z, settings = {}) {
                         } else {
                             console.warn(`Light for ${x}_${y}_${z} not found in lightKeys.`);
                         }
+                    }
+
+                    const audioIdx = audios.findIndex(l => l.sound.name === `audio0-${x}_${y}_${z}`);
+                    if (audioIdx !== -1) {
+                        const audio = audios[audioIdx];
+                        audio.audioEngine.dispose();
+                        audios.splice(audioIdx, 1);
                     }
                     // remove particle system if it exists
                     if (map.at(x, y, z).particleSystem) {
@@ -1123,11 +1314,18 @@ function spawnOre(x, y, z, settings) {
         oreData = {};
         
         if (data.dripstone) {
-            settings.noVein = true;
-            settings.noGeode = true;
-            oreData.ore = oreData.bg = getBGOre(x, Math.round(y - 5 + data.dripstone * 5), z);
-            settings.scale.x = settings.scale.z = data.dripstone;
-        } else {
+            const bgOre = getBGOre(...data.dripstone.source);
+
+            if (!ores[bgOre]?.noDripstone) {
+                oreData.ore = oreData.bg = bgOre;
+                settings.noVein = true;
+                settings.noGeode = true;
+                settings.scale.x = settings.scale.z = data.dripstone.size;
+            } else {
+                delete data.dripstone;
+            }
+        }
+        if (!data.dripstone) {
             settings.cave = {};
             settings.caveAir = true;
             if (data.caveFloor) {
@@ -1140,7 +1338,7 @@ function spawnOre(x, y, z, settings) {
                 settings.cave.walls = data.caveWall;
             }
             settings.cave.air = true;
-            if (!Object.keys(settings.cave).length) return map.at(x, y, z, { ore: "air", caveType: data.caveType });
+            if (!Object.keys(settings.cave).length) return map.at(x, y, z, {ore: "air", caveType: data.caveType});
         }
     }
     
@@ -1159,13 +1357,15 @@ function spawnOre(x, y, z, settings) {
         let h = ores[oreData.ore].tree.height || { min: 4, max: 4 };
         if (typeof h === "number") h = { min: h, max: h };
         const height = Math.floor(Math.random() * (h.max - h.min + 1)) + h.min;
+        const settings2 = {...settings};
+        if (ores[oreData.ore].tree.allowTransparent) settings2.allowTransparent = true;
         generateTree(
             x, y, z,
             oreData.ore,
             typeof ores[oreData.ore].tree.leaves.block === "function" ? ores[oreData.ore].tree.leaves.block(x, y, z) : ores[oreData.ore].tree.leaves.block,
             height,
             typeof ores[oreData.ore].tree.leaves.size === "function" ? ores[oreData.ore].tree.leaves.size(x, y, z) : ores[oreData.ore].tree.leaves.size,
-            settings
+            settings2
         );
     }
     return map.at(x, y, z);
@@ -1311,7 +1511,12 @@ export function generateStructure(gridX, gridY, gridZ, structure, settings) {
                     
                     if (block === null) continue;
                     if (block) {
-                        if (map.at(x2, y2, z2) && !settings.forced && !map.at(x2, y2, z2).temp) continue;
+                        if (settings.allowOverride) {
+                            spawnOre(x2, y2, z2, settings);
+                        }
+                        const isAir = airAt(x2, y2, z2);
+                        if (isAir && !settings.forced && !map.at(x2, y2, z2).temp) continue;
+                        if (map.at(x2, y2, z2) && !isAir && settings.forced !== 2 && !map.at(x2, y2, z2).temp) continue;
                         if (block === "air") {
                             if (settings.forced) removeOre(x2, y2, z2, {type: "structure"});
                             map.at(x2, y2, z2, true);
@@ -1515,7 +1720,7 @@ function miningTick() {
     const oldIntersect = CURRENT_ORE[4];
     
     const x = LAST_ORE[0], y = LAST_ORE[1], z = LAST_ORE[2];
-    if (CURRENT_ORE[0] !== x || CURRENT_ORE[1] !== y || CURRENT_ORE[2] !== z || oldIntersect > inventory.currentPickaxe.range) {
+    if (CURRENT_ORE[0] !== x || CURRENT_ORE[1] !== y || CURRENT_ORE[2] !== z) {
         if (vars.miningStartTime < performance.now() && CURRENT_ORE && map.at(CURRENT_ORE[0], CURRENT_ORE[1], CURRENT_ORE[2]) && oreAt(CURRENT_ORE[0], CURRENT_ORE[1], CURRENT_ORE[2])) {
             setProgress(CURRENT_ORE[0], CURRENT_ORE[1], CURRENT_ORE[2]);
         }
@@ -1530,7 +1735,9 @@ function miningTick() {
     if (!(vars.miningStartTime < performance.now())) {
         getElementById("miningTime").innerText = formatTime((map.at(x, y, z).str) / calculatePower(x, y, z) * (1 - (map.at(x, y, z).progress || 0))).replace("Infinity", "Unbreakable") + " + " + ((vars.miningStartTime - performance.now()) / 1000).toFixed(2) + " sec";
         getElementById("miningTime").style.color = "#ff0";
-        getElementById("mining-progress").value = (map.at(x, y, z).progress || 0) * 100;
+        getElementById("mining-progress").style.setProperty("--color", "#ff0");
+        if (inventory.currentPickaxe.delay >= 0.2) getElementById("mining-progress").value = (((vars.miningStartTime - performance.now()) / 1000 / inventory.currentPickaxe.delay)) * 100;
+        else getElementById("mining-progress").value = 0;
     }
     
     CURRENT_ORE = LAST_ORE;
@@ -1945,7 +2152,8 @@ function pickPredicate(mesh) {
 }
 
 // tick function
-engine.runRenderLoop(() => {
+function tick() {
+    requestAnimationFrame(tick);
     if (vars.PAUSED) return;
     FRAME_TIME = Math.min((performance.now() - LAST_FRAME) / 1000, 0.1); // cap frame time to prevent huge lag spikes
     LAST_FRAME = performance.now();
@@ -1960,6 +2168,12 @@ engine.runRenderLoop(() => {
 
     itemTick();
     loadNearbyChunks();
+
+    if (layers[CURRENT_LAYER]?.tick) {
+        layers[CURRENT_LAYER].tick(player.position.x, player.position.y, player.position.z);
+    } else if (biomes[CURRENT_LAYER]?.tick) {
+        biomes[CURRENT_LAYER].tick(player.position.x, player.position.y, player.position.z);
+    }
     
     for (let i = 0; i < vars.removalQueue.length; i++) {
         const r = vars.removalQueue[i];
@@ -1990,6 +2204,7 @@ engine.runRenderLoop(() => {
     for (let i = 0; i < needingUpdate.length; i++) {
         /** @type {BABYLON.Mesh} */
         const mesh = meshes[needingUpdate[i]];
+        if (mesh === undefined) return;
         const matrices = mesh.thinInstanceGetWorldMatrices();
         if (matrices[0] !== undefined) mesh.thinInstanceSetMatrixAt(0, matrices[0]);
     }
@@ -2081,7 +2296,7 @@ engine.runRenderLoop(() => {
             newYVelocity = Math.sign(newYVelocity) * (3 + Math.PI); // limit fall speed (the pi is to prevent blocks appearing to repeat)
         }
         
-        if (keys['jump'] && canJump) {
+        if (keys.jump && canJump) {
             newYVelocity = jumpSpeed;
             canJump = false;
         }
@@ -2441,6 +2656,15 @@ engine.runRenderLoop(() => {
         cameraLight.position.copyFrom(perspectiveCamera.position);
         cameraLight.setDirectionToTarget(perspectiveCamera.getForwardRay().direction.scale(10).addInPlace(perspectiveCamera.position));
     }
+
+    // audio listener updates
+    for (let i = 0; i < audios.length; i++) {
+        const audio = audios[i];
+        audio.audioEngine.listener.position.copyFrom(perspectiveCamera.position);
+        audio.audioEngine.listener.rotation.copyFrom(perspectiveCamera.rotation);
+        audio.audioEngine.listener.rotation.y += Math.PI;
+        audio.audioEngine.listener.rotation.x /= 4;
+    }
     
     // update sun position
     const angle = getTime();
@@ -2497,6 +2721,7 @@ engine.runRenderLoop(() => {
     const raycaster = perspectiveCamera.getForwardRay(inventory.currentPickaxe.range);
     const hit = scene.pickWithRay(raycaster, pickPredicate);
     if (hit.hit) {
+        vars.intersect = hit;
         const picked = getPickedOreCoords(hit);
         if (!picked) {
             console.log("Error: Hit an ore mesh but couldn't get coordinates", hit);
@@ -2544,6 +2769,10 @@ engine.runRenderLoop(() => {
             }
         }
     } else {
+        if ((vars.miningStartTime < performance.now() && CURRENT_ORE && map.at(CURRENT_ORE[0], CURRENT_ORE[1], CURRENT_ORE[2]) && oreAt(CURRENT_ORE[0], CURRENT_ORE[1], CURRENT_ORE[2]))) {
+            setProgress(CURRENT_ORE[0], CURRENT_ORE[1], CURRENT_ORE[2]);
+        }
+
         hide();
     }
     
@@ -2594,7 +2823,14 @@ engine.runRenderLoop(() => {
     scene.clearColor = scene.fogColor;
     scene.fogColor = scene.clearColor;
     scene.render();
-});
+}
+
+vars.setFogColor = (color, night) => {
+    vars.fogColor = getColor(color);
+    vars.nightFogColor = getColor(night ?? color);
+}
 
 textures["skybox/space"] = new BABYLON.Texture("img/block/skybox/space.png", scene);
 textures["skybox/space"].coordinatesMode = BABYLON.Texture.SKYBOX_MODE;
+
+tick();

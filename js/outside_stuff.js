@@ -111,6 +111,7 @@ export function getOres(x, y, z, settings) {
         const oreData = perLayerOreArray[layer][i];
         const ore = oreData.id;
         if (oreData.chance === 0) continue;
+        if (new Set(settings.exclude).has(ore)) continue;
         if (settings.crystal && oreData.noCrystal) continue;
         
         let cave = !(settings.cave || oreData.cave);
@@ -272,7 +273,7 @@ export function getOre(x, y, z, settings) {
         potentials.sort((a, b) => a.chance - b.chance);
         let total = potentials.filter(g => g.chance !== Infinity).reduce((acc, g) => acc + g.chance, 0);
         if (total > 1) {
-            let rand = preciseRandom(x, y, z, vars.seed + Math.SQRT1_2 + (settings.seedMod || 0)) * total;
+            let rand = settings.trueRandom ? preciseRandom() : preciseRandom(x, y, z, vars.seed + Math.SQRT1_2 + (settings.seedMod || 0)) * total;
             let sum = 0;
             for (let i = 0; i < potentials.length; i++) {
                 const pot = potentials[i];
@@ -285,7 +286,7 @@ export function getOre(x, y, z, settings) {
                 }
             }
         } else if (total > 0) {
-            let rand = preciseRandom(x, y, z, vars.seed + Math.SQRT1_2 + (settings.seedMod || 0)) * (settings.forceSpawn ? total : 1); // forceSpawn is a setting that forces at least one ore to spawn (crates use this)
+            let rand = settings.trueRandom ? preciseRandom() : preciseRandom(x, y, z, vars.seed + Math.SQRT1_2 + (settings.seedMod || 0)) * (settings.forceSpawn ? total : 1); // forceSpawn is a setting that forces at least one ore to spawn (crates use this)
             let sum = 0;
             for (let i = 0; i < potentials.length; i++) {
                 const pot = potentials[i];
@@ -352,7 +353,7 @@ export function calculateChance(y, interval, x, z, disregardCondition, adjusted,
     }
 
     if (1 - (1 - (minc + dc * progress)) <= vars.RARE_ORE_CHANCE_MULTIPLIER_CUTOFF) i *= vars.RARE_ORE_CHANCE_MULTIPLIER;
-    if (layers[getLayer(y, x, z, false)]?.universalCondition) {
+    if (layers[getLayer(y, x, z, false)]?.universalCondition && !disregardCondition) {
         i *= Number(layers[getLayer(y, x, z, false)].universalCondition(x, y, z, settings || {}));
     }
 
@@ -412,16 +413,6 @@ export function calculatePower(x, y, z) {
     let pow = typeof inventory.currentPickaxe.power === "function" ? inventory.currentPickaxe.power(x, y, z) : inventory.currentPickaxe.power;
     // if (y < vars.player.maxSafeDepth) pow /= 1.05 ** (vars.player.maxSafeDepth - y);
     return pow;
-}
-
-export function getColor(input) {
-    try {
-        const color = new Color(input).toString({format: "hex", collapse: false});
-        return BABYLON.Color3.FromHexString(color);
-    } catch (e) {
-        console.error(`Invalid color: ${input} | ${e}`);
-        return new BABYLON.Color3(1, 1, 1);
-    }
 }
 
 document.getElementById("version").innerText = `Version ${vars.version}`;

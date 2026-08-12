@@ -2204,7 +2204,7 @@ function tick() {
     for (let i = 0; i < needingUpdate.length; i++) {
         /** @type {BABYLON.Mesh} */
         const mesh = meshes[needingUpdate[i]];
-        if (mesh === undefined) return;
+        if (mesh === undefined) continue;
         const matrices = mesh.thinInstanceGetWorldMatrices();
         if (matrices[0] !== undefined) mesh.thinInstanceSetMatrixAt(0, matrices[0]);
     }

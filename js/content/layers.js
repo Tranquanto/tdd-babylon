@@ -809,13 +809,23 @@ const biomes = {
         fogColor: "#0000ff",
         music: "Tranquanto - Error"
     },
-    moss: {
-        name: "Moss",
-        maxY: minHeight,
+    mossCave: {
+        name: "Mossy Cave",
+        maxY: 0,
         minY: -7000,
         size: 200,
         requirement(x, y, z) {
-            return getBiomeNumber(x, y, z, "moss") >= 0.35;
+            return getBiomeNumber(x, y, z, "moss") >= 0.2914; // ~15% chance
+        },
+        cosmetic: true
+    },
+    enchantedCave: {
+        name: "Enchanted Cave",
+        maxY: 0,
+        minY: -10000,
+        size: 200,
+        requirement(x, y, z) {
+            return getBiomeNumber(x, y, z, "moss") >= 0.5318; // genuinely ~2% chance :sob:
         },
         cosmetic: true
     }
@@ -887,7 +897,7 @@ export function getHumidity(x, _y, z) {
     // -1 = dry, 0 = neutral, 1 = wet
     const TEMPERATURE_INTERVAL = BIOME_INTERVAL * 11;
     let y2 = 0;
-    let base = humidityNoise.noise(x / TEMPERATURE_INTERVAL, y2 / TEMPERATURE_INTERVAL, z / TEMPERATURE_INTERVAL) * 1.6;
+    let base = humidityNoise.noise(x / TEMPERATURE_INTERVAL, y2 / TEMPERATURE_INTERVAL, z / TEMPERATURE_INTERVAL) * 1.35;
 
     base = Math.min(1, Math.max(-1, base));
 

@@ -18,6 +18,7 @@ const vars = {
         stepHeight: 0.5,
         nightVision: false,
         health: 100,
+        regenCooldown: 5000,
         radiation: 0,
         godMode: new URLSearchParams(location.search).has("godmode"),
         /**
@@ -35,6 +36,7 @@ const vars = {
             if (this.lastHit + cooldown > performance.now() && !force) return;
             if (cooldown) this.lastHit = performance.now();
             else this.lastHit = -Infinity;
+            this.lastRealHit = performance.now();
             this.health -= amount;
 
             if (vignette) {

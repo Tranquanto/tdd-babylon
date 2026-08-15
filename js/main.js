@@ -19,6 +19,7 @@ const MAX_MESH_COUNT = 1024, MESH_CHUNK_SIZE = 128;
 let STARTED = true;
 let LAST_FRAME = performance.now(); // for FPS calculation
 let FRAME_TIME = 0;
+let LAST_FRAME_TIME = 0;
 let MINING = false;
 let LAST_ORE = [], CURRENT_ORE = [];
 let CURRENT_LAYER, INITIALIZED_LAYER = false;
@@ -41,6 +42,9 @@ scene.fogEnabled = true;
 scene.fogDensity = 0.01;
 scene.fogMode = BABYLON.Scene.FOGMODE_EXP2;
 scene.useRightHandedSystem = true;
+
+vars.scene = scene;
+vars.perspectiveCamera = perspectiveCamera;
 
 const raycaster = new BABYLON.Ray(new BABYLON.Vector3(), new BABYLON.Vector3());
 raycaster.length = 1000;
@@ -422,7 +426,7 @@ document.addEventListener('keyup', event => {
         break;
     }
 });
-document.addEventListener("mousedown", e => {
+canvas.addEventListener("mousedown", e => {
     getElementById("dpad").style.display = "none";
     vars.startIdleTime = performance.now();
     if (e.button === 0) {
@@ -435,7 +439,7 @@ document.addEventListener("mousedown", e => {
         rightClick();
     }
 });
-document.addEventListener("mouseup", e => {
+canvas.addEventListener("mouseup", e => {
     if (e.button !== 0) return;
     // stop mining
     if (MINING) {
@@ -588,10 +592,18 @@ const checkCollision = (pos, returnOre, includeNoCollision) => {
 };
 
 export function teleport(x, y, z) {
-    player.velocity.set(0, 0, 0);
-    if (x === undefined) x = 0;
-    if (y === undefined) y = 0;
-    if (z === undefined) z = 0;
+    if (!player.velocity.set) player.velocity = new BABYLON.Vector3(0, 0, 0);
+    else player.velocity.set(0, 0, 0);
+
+    x = Number(x);
+    y = Number(y);
+    z = Number(z);
+
+    if (nd(x)) x = 0;
+    if (nd(x)) y = 0;
+    if (nd(x)) z = 0;
+
+    if (!player.position.set) player.position = new BABYLON.Vector3(0, 0, 0);
     player.position.set(x, y, z);
     if (!map.at(x, y, z)) map.at(x, y, z, true);
     if (!map.at(x, y + 1, z)) map.at(x, y + 1, z, true);
@@ -630,9 +642,12 @@ function getTexture(ore, face, type, setTransparent) {
     return textures[`${ore}`];
 }
 
+vars.getTexture = getTexture;
+
 export async function generateOre(x, y, z, ore, bg, settings) {
     if (!ores[ore]) return;
     x = Math.round(x), y = Math.round(y), z = Math.round(z);
+    settings = {...settings};
 
     if (ores[ore].customModel) settings.customModel = ore;
     if (ores[ore].singleLayer || ores[ore].customModel) bg = ore;
@@ -695,10 +710,10 @@ export async function generateOre(x, y, z, ore, bg, settings) {
             });
             settings.rotation = sides.length > 0 ? sides[Math.floor(Math.random() * sides.length)][1] : {x: 0, y: 0, z: 0};
         } else {
-            settings.rotation = { x: 0, y: Math.floor(Math.random() * 4) * Math.PI / 2, z: 0 };
+            settings.rotation = { x: 0, y: 0, z: 0 };
             if (ores[ore]) {
                 if (ores[ore].rotation) settings.rotation = JSON.parse(JSON.stringify(ores[ore].rotation));
-                else if (ores[ore].noRandomRotation || ores[bg].noRandomRotation) settings.rotation.y = 0;
+                // else if (ores[ore].noRandomRotation || ores[bg].noRandomRotation) settings.rotation.y = 0;
             }
         }
     }
@@ -779,7 +794,7 @@ export async function generateOre(x, y, z, ore, bg, settings) {
             const oreMaterial = new BABYLON.PBRMaterial(`oreMaterial-${x}_${y}_${z}`, scene);
             oreMaterial.baseColor = oreMaterial.diffuseColor = new BABYLON.Color3(1, 1, 1);
             oreMaterial.ambientColor = new BABYLON.Color3(1, 1, 1);
-            oreMaterial.specularColor = ore === bg || ores[ore]?.singleLayer ? new BABYLON.Color3(0.5, 0.5, 0.5) : new BABYLON.Color3(0, 0, 0);
+            oreMaterial.specularColor = new BABYLON.Color3(0, 0, 0);
             oreMaterial.alphaMode = 2;
             
             oreMaterial.roughness = 1;
@@ -791,7 +806,7 @@ export async function generateOre(x, y, z, ore, bg, settings) {
                     const mat = new BABYLON.PBRMaterial(`oreMaterial-${x}_${y}_${z}-${i}`, scene);
                     mat.baseColor = mat.diffuseColor = new BABYLON.Color3(1, 1, 1);
                     mat.ambientColor = new BABYLON.Color3(1, 1, 1);
-                    mat.specularColor = ore === bg || ores[ore]?.singleLayer ? new BABYLON.Color3(0.5, 0.5, 0.5) : new BABYLON.Color3(0, 0, 0);
+                    mat.specularColor = new BABYLON.Color3(0, 0, 0);
                     mat.alphaMode = 2;
                     mat.baseTexture = mat.albedoTexture = mat.opacityTexture = getTexture(ore, i);
                     mat.usePhysicalLightFalloff = false;
@@ -871,12 +886,24 @@ export async function generateOre(x, y, z, ore, bg, settings) {
                 }
             }
             
-            if (ores[ore]?.textureHasTransparency) {
+            if (ores[ore].textureHasTransparency) {
                 backgroundMaterial.alpha = 0;
+                backgroundMaterial.alphaMode = BABYLON.Constants.ALPHA_DISABLE;
+                backgroundMaterial.transparencyMode = BABYLON.PBRMaterial.PBRMATERIAL_OPAQUE;
+                bgMaterials.length = 0;
                 
                 for (const oreMaterial of materials) {
-                    oreMaterial.transparencyMode = BABYLON.PBRMaterial.PBRMATERIAL_ALPHATEST;
+                    oreMaterial.transparencyMode = BABYLON.PBRMaterial.PBRMATERIAL_ALPHABLEND;
+                    oreMaterial.forceDepthWrite = true;
                 }
+
+                oreMesh.alphaIndex = 100;
+            } else if (!ores[ore].singleLayer) {
+                for (const oreMaterial of materials) {
+                    oreMaterial.transparencyMode = BABYLON.PBRMaterial.PBRMATERIAL_ALPHABLEND;
+                }
+            } else {
+                oreMaterial.transparencyMode = BABYLON.PBRMaterial.PBRMATERIAL_OPAQUE;
             }
 
             if (ores[ore].singleLayer || ores[ore].forcedBG) {
@@ -1432,7 +1459,7 @@ function getStructurePlacementData(structure, gridX, gridY, gridZ) {
         return Math.floor(value * (maxOffset * 2 + 1)) - maxOffset;
     };
     
-    const gridJitter = typeof structure.gridJitter === "number" ? Math.max(0, Math.min(1, structure.gridJitter)) : 1;
+    const gridJitter = typeof structure.gridJitter === "number" ? Math.max(0, Math.min(0.5, structure.gridJitter)) : 0.5;
     const maxOffsetX = Math.floor((structure.width - 1) * gridJitter);
     const maxOffsetY = Math.floor((structure.height - 1) * gridJitter);
     const maxOffsetZ = Math.floor((structure.depth - 1) * gridJitter);
@@ -2110,7 +2137,13 @@ for (let i = 0; i < oreArray.length; i++) {
 
 function start() {
     locations[0][1] = topLayer(locations[0][0], locations[0][2]) + 1;
-    player.position.y = locations[0][1] + 1;
+
+    if (new URLSearchParams(location.search).has("spawn")) {
+        const spawn = new URLSearchParams(location.search).get("spawn").split(",");
+        teleport(spawn[0], spawn[1], spawn[2]);
+    } else {
+        player.position.y = locations[0][1] + 1;
+    }
     
     for (let i = 0; i < locations.length; i++) {
         const location = locations[i];
@@ -2157,9 +2190,10 @@ function tick() {
     if (vars.PAUSED) return;
     FRAME_TIME = Math.min((performance.now() - LAST_FRAME) / 1000, 0.1); // cap frame time to prevent huge lag spikes
     LAST_FRAME = performance.now();
+    LAST_FRAME_TIME = LAST_FRAME_TIME * 0.97 + FRAME_TIME * 0.03;
     vars.FRAME_TIME = FRAME_TIME;
     
-    getElementById("fps").textContent = `FPS: ${(1 / FRAME_TIME).toFixed(1)}`;
+    getElementById("fps").textContent = `FPS: ${Math.round(1 / LAST_FRAME_TIME)}`;
     
     for (let i = 0; i < animatedCanvases.length; i++) {
         ores[animatedCanvases[i]].getCanvas();
@@ -2613,8 +2647,8 @@ function tick() {
             function updateLighting(area) {
                 scene.fogStart = 0;
                 // scene.fogEnd = area.fog || 1000;
-                scene.fogDensity = 0.3 / (Math.sqrt(area.fog || 100));
-                perspectiveCamera.maxZ = area.fog || 1000;
+                scene.fogDensity = 0.2 / (Math.sqrt(area.fog || 100));
+                perspectiveCamera.maxZ = area.fog * 1.7 || 1000;
                 vars.fogColor = area.fogColor || "#000000";
                 vars.nightFogColor = area.nightFogColor || vars.fogColor;
                 
@@ -2777,14 +2811,14 @@ function tick() {
     }
     
     // hp + radiation
-    player.health += FRAME_TIME; // health regeneration
+    if (performance.now() - player.lastRealHit > player.regenCooldown) player.health += FRAME_TIME * 3; // health regeneration
     let netChange = player.radiation + 0;
     player.radiation *= 0.95 ** FRAME_TIME; // decay radiation over time
     player.radiation -= 0.3 * FRAME_TIME; // slight radiation loss over time
     netChange = player.radiation - netChange;
     for (let i = 0; i < radArr.length; i++) {
         const source = radArr[i];
-        const dist = player.position.distanceTo(source.position);
+        const dist = BABYLON.Vector3.Distance(player.position, source.position);
         if (dist < 15) {
             const r = source.strength * (1 - source.falloff) ** Math.max(dist - 2, 0) ** 2 * FRAME_TIME;
             player.radiation += r;
@@ -2803,8 +2837,10 @@ function tick() {
     } else if (geigerAudio.isPlaying) {
         geigerAudio.stop();
     }
-    if (player.radiation > 0) {
-        player.damage((player.radiation) * 0.08 * FRAME_TIME, 0, "radiation", true, false, false);
+    if (player.radiation > 12.5) {
+        player.damage(((player.radiation) * 0.08 - 1) * FRAME_TIME, 0, "radiation", true, false, false);
+    } else if (player.radiation > 0) {
+        player.health -= (player.radiation) * 0.24 * FRAME_TIME;
     } else player.radiation = 0;
     
     if (player.health > 100) player.health = 100;

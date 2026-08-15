@@ -568,6 +568,162 @@ ores.exoticMatter.tick = (x, y, z) => {
             oreMesh.computeBoundingSphere();
         }
     }
+}
+
+ores.darkGem.onGenerate = (x, y, z) => {
+    function addAccretionDisc() {
+        const g = new THREE.PlaneGeometry(2.75, 2.75);
+        const material = new THREE.MeshPhongMaterial({
+            color: 0xffffff,
+            side: THREE.DoubleSide,
+            map: vars.textures.turnyThing,
+            transparent: true,
+            opacity: 0.8,
+            depthWrite: false
+        });
+        const mesh = new THREE.InstancedMesh(g, material, 48);
+        mesh.count = 48;
+        mesh.position.set(x, y, z);
+        mesh.name = `darkGem-${x}-${y}-${z}`;
+        mesh.renderOrder = 99;
+        mesh.rotation.set(Math.PI / 2, 0, Math.random() * Math.PI * 2);
+        mesh.userData.active = true;
+        mesh.userData.speed = Array(mesh.count).fill().map(() => Math.random() * 0.01 + 0.03);
+        vars.scene.add(mesh);
+        
+        for (let i = 0; i < mesh.count; i++) {
+            const dummy = new THREE.Object3D();
+            dummy.position.setScalar(0);
+            dummy.rotation.set(
+                Math.random() * 0.1 - 0.05,
+                Math.random() * 0.1 - 0.05,
+                Math.random() * Math.PI * 2
+            );
+            dummy.updateMatrix();
+            mesh.setMatrixAt(i, dummy.matrix);
+            const n = Math.random();
+            mesh.setColorAt(i, new THREE.Color(Math.floor(n * 128) * 256 ** 2 + Math.floor(n * 256)));
+        }
+        
+        mesh.instanceColor.needsUpdate = true;
+        
+        function meshTick() {
+            if (!mesh.userData.active) return;
+            // mesh.rotation.z += mesh.userData.speed;
+            requestAnimationFrame(meshTick);
+            if (vars.PAUSED) return;
+            if (map.at(x, y, z).ore !== "darkGem") vars.scene.remove(mesh);
+            
+            for (let i = 0; i < mesh.count; i++) {
+                const matrix = new THREE.Matrix4();
+                mesh.getMatrixAt(i, matrix);
+                const dummy = new THREE.Object3D();
+                dummy.applyMatrix4(matrix);
+                dummy.rotation.z += mesh.userData.speed[i];
+                dummy.updateMatrix();
+                mesh.setMatrixAt(i, dummy.matrix);
+            }
+            
+            mesh.instanceMatrix.needsUpdate = true;
+            mesh.computeBoundingBox();
+            mesh.computeBoundingSphere();
+        }
+        meshTick();
+    }
+    
+    addAccretionDisc();
+}
+
+ores.darkGem.onRemove = (x, y, z) => {
+    const mesh2 = vars.scene.getObjectByName(`darkGem-${x}-${y}-${z}`);
+    if (mesh2) {
+        vars.scene.remove(mesh2);
+    }
+}
+
+ores.testModel.onGenerate = (x, y, z) => {
+    const g = new THREE.BoxGeometry(1, 1, 1);
+    const m = new THREE.MeshStandardMaterial({color: 0xaaaaaa});
+    const mesh = new THREE.InstancedMesh(g, m, 512);
+    mesh.count = 512;
+    mesh.position.set(x, y, z);
+    mesh.renderOrder = 99;
+    mesh.userData.active = true;
+    mesh.name = `testModel-${x}-${y}-${z}`;
+    
+    for (let i = 0; i < mesh.count; i++) {
+        const dummy = new THREE.Object3D();
+        dummy.position.set(
+            (Math.random() - 0.5),
+            (Math.random() - 0.5),
+            (Math.random() - 0.5)
+        ).normalize().multiplyScalar(1.1 ** (Math.random() * Math.log(60) / Math.log(1.1)) / 10);
+        
+        dummy.rotation.set(
+            Math.random() * Math.PI * 2,
+            Math.random() * Math.PI * 2,
+            Math.random() * Math.PI * 2
+        );
+        dummy.scale.setScalar(0.001);
+        dummy.updateMatrix();
+        mesh.setMatrixAt(i, dummy.matrix);
+    }
+    
+    mesh.instanceMatrix.needsUpdate = true;
+    mesh.computeBoundingBox();
+    mesh.computeBoundingSphere();
+}
+
+ores.testModel.onRemove = (x, y, z) => {
+    const mesh = vars.scene.getMeshByName(`testModel-${x}-${y}-${z}`);
+    if (mesh) {
+        vars.scene.removeMesh(mesh);
+    }
+}
+
+ores.testModel.tick = (x, y, z) => {
+    const mesh = vars.scene.getObjectByName(`testModel-${x}-${y}-${z}`);
+    if (mesh && mesh.userData.active) {
+        mesh.rotation.y += 0.04 * vars.FRAME_TIME * 60;
+        for (let i = 0; i < mesh.count; i++) {
+            const dummy = new THREE.Object3D();
+            const matrix = new THREE.Matrix4();
+            mesh.getMatrixAt(i, matrix);
+            dummy.applyMatrix4(matrix);
+            const oldDist = dummy.position.distanceTo(new THREE.Vector3(0, 0, 0));
+            dummy.position.multiplyScalar(0.95);
+            
+            let scale = dummy.position.distanceTo(new THREE.Vector3(0, 0, 0)) / 15;
+            if (scale > 0.2) scale = Math.max(0, 0.4 - scale);
+            
+            dummy.scale.setScalar(scale);
+            dummy.updateMatrix();
+            
+            if (oldDist < 0.1) {
+                dummy.position.set(
+                    (Math.random() - 0.5) * 1.1 ** (Math.random() * Math.log(6) / Math.log(1.1)),
+                    (Math.random() - 0.5) * 1.1 ** (Math.random() * Math.log(6) / Math.log(1.1)),
+                    (Math.random() - 0.5) * 1.1 ** (Math.random() * Math.log(6) / Math.log(1.1))
+                );
+                
+                dummy.position.normalize().multiplyScalar(6);
+                
+                dummy.rotation.set(
+                    Math.random() * Math.PI * 2,
+                    Math.random() * Math.PI * 2,
+                    Math.random() * Math.PI * 2
+                );
+                dummy.scale.setScalar(0.001);
+                
+                dummy.updateMatrix();
+            }
+            
+            mesh.setMatrixAt(i, dummy.matrix);
+        }
+        mesh.instanceMatrix.needsUpdate = true;
+        mesh.computeBoundingBox();
+        mesh.computeBoundingSphere();
+    }
 } */
 
 ores.googite.chance[0].condition = ores.rainCloud.condition;

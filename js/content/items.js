@@ -761,7 +761,11 @@ let ores = {
         str: 1.5,
         singleLayer: true,
         desc: "A basic radioactive mineral.",
-        sfx: "stone"
+        sfx: "stone",
+        emissive: {
+            map: "pitchblende_emissive",
+            str: 0.4
+        }
     },
     obsidian: {
         name: "Obsidian",
@@ -1215,7 +1219,7 @@ let ores = {
         maxY: -1,
         minY: -7000,
         condition(x, y, z) {
-            return biomes.moss.requirement(x, y, z);
+            return biomes.mossCave.requirement(x, y, z);
         },
         conditionLabel: "Filler block of moss caves",
         priority: 2,
@@ -1259,7 +1263,7 @@ let ores = {
             ceiling: true
         },
         condition(x, y, z) {
-            return biomes.moss.requirement(x, y + 1, z);
+            return biomes.mossCave.requirement(x, y + 1, z);
         },
         sfx: "grass"
     },
@@ -1729,7 +1733,7 @@ let ores = {
             color: "#f80"
         },
         condition(x, y, z) {
-            return !biomes.moss.requirement(x, y, z);
+            return !biomes.mossCave.requirement(x, y, z);
         }
     },
     ash: {
@@ -3238,7 +3242,7 @@ let ores = {
                                 z: (Math.random() - 0.5) * 2
                             },
                             opacity: 1,
-                            color: new THREE.Color(`hsl(${Math.random() * 360}, 100%, 70%)`),
+                            color: getColor(`hsl(${Math.random() * 360}, 100%, 70%)`),
                             tick(particle) {
                                 particle.points.material.opacity *= 0.95;
                                 if (particle.points.material.opacity < 0.1) return true;
@@ -3310,76 +3314,7 @@ let ores = {
         forcedBackground: "obsidian",
         condition: () => false, // not normally obtainable; the 1/750k is the rarity of the structure it spawns in
         conditionLabel: "Only obtainable through Dark Gem Dungeons",
-        spawnMsg: "An evil aura begins to surround you...",
-        onGenerate(x, y, z) {
-            function addAccretionDisc() {
-                const g = new THREE.PlaneGeometry(2.75, 2.75);
-                const material = new THREE.MeshPhongMaterial({
-                    color: 0xffffff,
-                    side: THREE.DoubleSide,
-                    map: vars.textures.turnyThing,
-                    transparent: true,
-                    opacity: 0.8,
-                    depthWrite: false
-                });
-                const mesh = new THREE.InstancedMesh(g, material, 48);
-                mesh.count = 48;
-                mesh.position.set(x, y, z);
-                mesh.name = `darkGem-${x}-${y}-${z}`;
-                mesh.renderOrder = 99;
-                mesh.rotation.set(Math.PI / 2, 0, Math.random() * Math.PI * 2);
-                mesh.userData.active = true;
-                mesh.userData.speed = Array(mesh.count).fill().map(() => Math.random() * 0.01 + 0.03);
-                vars.scene.add(mesh);
-                
-                for (let i = 0; i < mesh.count; i++) {
-                    const dummy = new THREE.Object3D();
-                    dummy.position.setScalar(0);
-                    dummy.rotation.set(
-                        Math.random() * 0.1 - 0.05,
-                        Math.random() * 0.1 - 0.05,
-                        Math.random() * Math.PI * 2
-                    );
-                    dummy.updateMatrix();
-                    mesh.setMatrixAt(i, dummy.matrix);
-                    const n = Math.random();
-                    mesh.setColorAt(i, new THREE.Color(Math.floor(n * 128) * 256 ** 2 + Math.floor(n * 256)));
-                }
-
-                mesh.instanceColor.needsUpdate = true;
-
-                function meshTick() {
-                    if (!mesh.userData.active) return;
-                    // mesh.rotation.z += mesh.userData.speed;
-                    requestAnimationFrame(meshTick);
-                    if (vars.PAUSED) return;
-                    if (map.at(x, y, z).ore !== "darkGem") vars.scene.remove(mesh);
-
-                    for (let i = 0; i < mesh.count; i++) {
-                        const matrix = new THREE.Matrix4();
-                        mesh.getMatrixAt(i, matrix);
-                        const dummy = new THREE.Object3D();
-                        dummy.applyMatrix4(matrix);
-                        dummy.rotation.z += mesh.userData.speed[i];
-                        dummy.updateMatrix();
-                        mesh.setMatrixAt(i, dummy.matrix);
-                    }
-
-                    mesh.instanceMatrix.needsUpdate = true;
-                    mesh.computeBoundingBox();
-                    mesh.computeBoundingSphere();
-                }
-                meshTick();
-            }
-
-            addAccretionDisc();
-        },
-        onRemove(x, y, z) {
-            const mesh2 = vars.scene.getObjectByName(`darkGem-${x}-${y}-${z}`);
-            if (mesh2) {
-                vars.scene.remove(mesh2);
-            }
-        }
+        spawnMsg: "An evil aura begins to surround you..."
     },
     googite: {
         name: "Googite",
@@ -3451,7 +3386,7 @@ let ores = {
         spawnMsg: "A verdant catalyst expands lush vegetation through the caverns...",
         caveExclusive: true,
         condition(x, y, z) {
-            return biomes.moss.requirement(x, y, z);
+            return biomes.mossCave.requirement(x, y, z);
         },
         conditionLabel: "Only spawns in moss caves",
         light: {
@@ -3511,41 +3446,40 @@ let ores = {
             str: 1.2
         },
         caveExclusive: true,
-        condition(_x, _y, _z, settings) {
-            return settings.caveType === "enchanted" && !vars.getOreSettings.crystal;
+        condition(x, y, z, settings) {
+            return biomes.enchantedCave.requirement(x, y, z) && !vars.getOreSettings.crystal;
         },
         excludeFromWiki: 1,
         conditionLabel: "Only spawns in enchanted caves",
         drops: [{id: "blankRune", count: 1}],
         noLocal: true,
         onGenerate(x, y, z) {
-            const geometry = new THREE.PlaneGeometry(1, 64);
-            const material = new THREE.MeshBasicMaterial({
-                color: 0xffffff,
-                map: vars.textures.lightRay,
-                transparent: true,
-                opacity: 0.05,
-                side: THREE.DoubleSide,
-                depthWrite: false
-            });
+            const material = new BABYLON.StandardMaterial("material");
 
-            const ray = new THREE.Mesh(geometry, material);
+            material.diffuseTexture = material.opacityTexture = vars.getTexture("lightRay", undefined, "src");
+            material.transparencyMode = BABYLON.Material.MATERIAL_ALPHABLEND;
+            material.alphaMode = BABYLON.Constants.ALPHA_COMBINE;
+            material.alpha = 0.1;
+            material.disableLighting = true;
+            material.emissiveColor = new BABYLON.Color3(1, 1, 1);
+
+            /** @type {BABYLON.Mesh} */
+            const ray = new BABYLON.CreatePlane(`runicStoneRay-${x}-${y}-${z}`, {width: 1, height: 64, sideOrientation: BABYLON.Mesh.DOUBLESIDE}, vars.scene);
             ray.position.set(x + (Math.random() - 0.5) * 15, y, z + (Math.random() - 0.5) * 15);
-            ray.rotation.x = vars.lightRayRotation + (Math.random() - 0.5) * 0.08;
-            ray.renderOrder = 99;
-            ray.name = `runicStoneRay-${x}-${y}-${z}`;
+            ray.rotation.z = vars.lightRayRotation + (Math.random() - 0.5) * 0.08;
+            ray.material = material;
 
-            ray.onBeforeRender = function() {
+            ray.onBeforeDrawObservable.add(() => {
                 const camera = vars.perspectiveCamera;
                 const cameraPosition = camera.position.clone();
-                const rayPosition = this.position.clone();
+                const rayPosition = ray.position.clone();
                 
-                const direction = new THREE.Vector2(
+                const direction = new BABYLON.Vector2(
                     cameraPosition.x - rayPosition.x,
                     cameraPosition.z - rayPosition.z
                 ).normalize();
                 
-                this.rotation.y = Math.atan2(direction.x, direction.y);
+                ray.rotation.y = Math.atan2(direction.x, direction.y);
 
                 const xzDistance = Math.sqrt(
                     Math.pow(cameraPosition.x - rayPosition.x, 2) + 
@@ -3554,14 +3488,13 @@ let ores = {
                 
                 // Adjust opacity based on x/z distance (fade out closer, fade in farther)
                 
-                this.material.opacity = Math.min(Math.max(0, 0.05 * (xzDistance - 2) / 10), 0.05);
-            };
-            vars.scene.add(ray);
+                ray.material.alpha = Math.min(Math.max(0, 0.1 * (xzDistance - 2) / 10), 0.1);
+            });
         },
         onRemove(x, y, z) {
-            const ray = vars.scene.getObjectByName(`runicStoneRay-${x}-${y}-${z}`);
+            const ray = vars.scene.getMeshByName(`runicStoneRay-${x}-${y}-${z}`);
             if (ray) {
-                vars.scene.remove(ray);
+                vars.scene.removeMesh(ray);
             }
         }
     },
@@ -4064,7 +3997,7 @@ let ores = {
         singleLayer: true,
         excludeFromWiki: 2,
         desc: "A pillar made of a mysterious purple material.",
-        condition: (x, _, z, settings) => settings.caveType === "enchanted" && Math.abs(x % 6) === 1 && Math.abs(z % 6) === 1,
+        condition: (x, y, z) => biomes.enchantedCave.requirement(x, y + 1, z) && Math.abs(x % 6) === 1 && Math.abs(z % 6) === 1,
         sfx: "stone",
         cave: {
             ceiling: true
@@ -4096,90 +4029,6 @@ let ores = {
         meshSize: 6,
         cave: {
             air: true
-        },
-        onGenerate(x, y, z) {
-            const g = new THREE.BoxGeometry(1, 1, 1);
-            const m = new THREE.MeshStandardMaterial({color: 0xaaaaaa});
-            const mesh = new THREE.InstancedMesh(g, m, 512);
-            mesh.count = 512;
-            mesh.position.set(x, y, z);
-            mesh.renderOrder = 99;
-            mesh.userData.active = true;
-            mesh.name = `testModel-${x}-${y}-${z}`;
-
-            for (let i = 0; i < mesh.count; i++) {
-                const dummy = new THREE.Object3D();
-                dummy.position.set(
-                    (Math.random() - 0.5),
-                    (Math.random() - 0.5),
-                    (Math.random() - 0.5)
-                ).normalize().multiplyScalar(1.1 ** (Math.random() * Math.log(60) / Math.log(1.1)) / 10);
-
-                dummy.rotation.set(
-                    Math.random() * Math.PI * 2,
-                    Math.random() * Math.PI * 2,
-                    Math.random() * Math.PI * 2
-                );
-                dummy.scale.setScalar(0.001);
-                dummy.updateMatrix();
-                mesh.setMatrixAt(i, dummy.matrix);
-            }
-
-            mesh.instanceMatrix.needsUpdate = true;
-            mesh.computeBoundingBox();
-            mesh.computeBoundingSphere();
-
-            vars.scene.add(mesh);
-        },
-        onRemove(x, y, z) {
-            const mesh = vars.scene.getObjectByName(`testModel-${x}-${y}-${z}`);
-            if (mesh) {
-                vars.scene.remove(mesh);
-            }
-        },
-        tick(x, y, z) {
-            const mesh = vars.scene.getObjectByName(`testModel-${x}-${y}-${z}`);
-            if (mesh && mesh.userData.active) {
-                mesh.rotation.y += 0.04 * vars.FRAME_TIME * 60;
-                for (let i = 0; i < mesh.count; i++) {
-                    const dummy = new THREE.Object3D();
-                    const matrix = new THREE.Matrix4();
-                    mesh.getMatrixAt(i, matrix);
-                    dummy.applyMatrix4(matrix);
-                    const oldDist = dummy.position.distanceTo(new THREE.Vector3(0, 0, 0));
-                    dummy.position.multiplyScalar(0.95);
-
-                    let scale = dummy.position.distanceTo(new THREE.Vector3(0, 0, 0)) / 15;
-                    if (scale > 0.2) scale = Math.max(0, 0.4 - scale);
-
-                    dummy.scale.setScalar(scale);
-                    dummy.updateMatrix();
-                    
-                    if (oldDist < 0.1) {
-                        dummy.position.set(
-                            (Math.random() - 0.5) * 1.1 ** (Math.random() * Math.log(6) / Math.log(1.1)),
-                            (Math.random() - 0.5) * 1.1 ** (Math.random() * Math.log(6) / Math.log(1.1)),
-                            (Math.random() - 0.5) * 1.1 ** (Math.random() * Math.log(6) / Math.log(1.1))
-                        );
-
-                        dummy.position.normalize().multiplyScalar(6);
-
-                        dummy.rotation.set(
-                            Math.random() * Math.PI * 2,
-                            Math.random() * Math.PI * 2,
-                            Math.random() * Math.PI * 2
-                        );
-                        dummy.scale.setScalar(0.001);
-
-                        dummy.updateMatrix();
-                    }
-
-                    mesh.setMatrixAt(i, dummy.matrix);
-                }
-                mesh.instanceMatrix.needsUpdate = true;
-                mesh.computeBoundingBox();
-                mesh.computeBoundingSphere();
-            }
         }
     },
     /* airCollector: {
@@ -5527,14 +5376,14 @@ let structures = {
         minY: -7000,
         log: false
     },
-    frostburnFacility: {
+    /* frostburnFacility: {
         chance: 1 / 16,
         maxY: -4000,
         minY: -5000,
         condition(x, y, z) {
             return getLayer(y, x, z) === "subzero";
         }
-    }
+    } */
 };
 
 let achievements = {

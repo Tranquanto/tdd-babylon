@@ -3,7 +3,7 @@ import { ores, layers, perLayerOreArray, getLayer } from "./content/items.js";
 import { rand01, heightMapNoise, heightMapNoiseLarge, heightMapMountain, heightMapMountainLarge, BIOME_INTERVAL } from "./perlin.js";
 import { isCave } from "./noise.js";
 import Color from "./color.js";
-import { VoxelMap } from "./Map.js";
+import { VoxelMap } from "./VoxelMap.js";
 
 export function checkAdjacent(x, y, z, func, includeCenter = false) {
     const positions = [[x - 1, y, z], [x + 1, y, z], [x, y - 1, z], [x, y + 1, z], [x, y, z - 1], [x, y, z + 1]];

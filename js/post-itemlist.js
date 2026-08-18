@@ -9,9 +9,9 @@ const spawnAlert = () => undefined;
 
 function tpMenu(locations = locations) {
     return function() {
-        if (document.getElementById("big-gui").style.display === "block") {
-            document.getElementById("big-gui").style.display = "none";
-            document.getElementById("big-gui").style.width = "";
+        if (getElementById("big-gui").style.display === "block") {
+            getElementById("big-gui").style.display = "none";
+            getElementById("big-gui").style.width = "";
             return;
         }
         // create teleportation menu
@@ -20,7 +20,7 @@ function tpMenu(locations = locations) {
         } catch (e) {
             // ignore
         }
-        const menu = document.getElementById("big-gui");
+        const menu = getElementById("big-gui");
         menu.innerHTML = "";
         menu.style.width = "30vw";
         

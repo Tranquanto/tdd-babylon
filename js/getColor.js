@@ -1,7 +1,7 @@
 import Color from "./color.js";
 
 export function getColor(input) {
-    if (input instanceof BABYLON.Color3) return input;
+    if (input instanceof BABYLON.Color4) return input;
     let output = input;
     if (typeof output === "number") {
         const str = output.toString(16);
@@ -9,10 +9,10 @@ export function getColor(input) {
     }
     try {
         const color = new Color(output).toString({ format: "hex", collapse: false });
-        return BABYLON.Color3.FromHexString(color);
+        return BABYLON.Color4.FromHexString(color);
     } catch (e) {
         console.error(`Invalid color: ${output} | ${e}`);
-        return new BABYLON.Color3(1, 1, 1);
+        return new BABYLON.Color4(1, 1, 1);
     }
 }
 
@@ -24,5 +24,5 @@ export function getColor(input) {
  */
 export function lerpColor(color1, color2, t) {
     const c1 = getColor(color1), c2 = getColor(color2);
-    return new BABYLON.Color3(Math.lerp(c1.r, c2.r, t), Math.lerp(c1.g, c2.g, t), Math.lerp(c1.b, c2.b, t));
+    return new BABYLON.Color4(Math.lerp(c1.r, c2.r, t), Math.lerp(c1.g, c2.g, t), Math.lerp(c1.b, c2.b, t), Math.lerp(c1.a, c2.a, t));
 }

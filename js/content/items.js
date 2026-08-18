@@ -267,16 +267,6 @@ let ores = {
             col: "#ff0",
             str: 3
         },
-        particles: {
-            area: {x: 2, y: 2, z: 2},
-            texture: "particle",
-            emitRate: 10,
-            lifetime: 2,
-            count: 50,
-            size: 0.1,
-            centerGravity: 0.2,
-            color: "#ff0"
-        },
         desc: "The Thunder Lord seems to have left this behind. Handle with care!",
         tier: "uncommon",
         conditionLabel: "Weather must be stormy",
@@ -1714,20 +1704,10 @@ let ores = {
         minY: -1500,
         str: 1.6,
         customModel: true,
+        oreColor: true,
         offset: {x: 0, y: -29 / 64, z: 0},
         cave: {
             floor: true
-        },
-        particles: {
-            area: {x: 0, y: 0, z: 0},
-            gravity: {x: 0, y: -0.5, z: 0},
-            velocity: {x: 0, y: 6, z: 0},
-            texture: "particle",
-            emitRate: 10,
-            lifetime: 4,
-            count: 50,
-            size: 0.06,
-            color: "#f80"
         },
         condition(x, y, z) {
             return !biomes.mossCave.requirement(x, y, z);
@@ -1813,19 +1793,12 @@ let ores = {
             }
         ],
         str: 2,
-        desc: "A fibrous silicate mineral that was commonly used for fireproofing before its health risks were discovered.",
+        desc: "A fibrous silicate mineral. Not very healthy!",
         customTexture: {
             ore: "transparent",
             item: {
                 src: "asbestos"
             }
-        },
-        particles: {
-            area: {x: 0.5, y: 0.5, z: 0.5},
-            gravity: {x: 0, y: -0.4, z: 0},
-            texture: "particle",
-            emitRate: 20,
-            lifetime: 3
         },
         cave: {
             ceiling: 2
@@ -2492,16 +2465,6 @@ let ores = {
         minY: -1000,
         desc: "The dragon's roar echoes throughout the mines...",
         excludeFromWiki: 1,
-        particles: {
-            area: {x: 0, y: 0, z: 0},
-            texture: "particle",
-            emitRate: 10,
-            lifetime: 2,
-            count: 50,
-            size: 0.4,
-            centerGravity: -5,
-            color: "#90f"
-        },
         light: {
             col: "#90f",
             str: 2
@@ -2540,16 +2503,6 @@ let ores = {
             col: "#eae3c8",
             str: 0.5
         },
-        particles: {
-            area: {x: 4, y: 4, z: 4},
-            texture: "particle",
-            emitRate: 5,
-            lifetime: 2,
-            count: 20,
-            size: 0.2,
-            centerGravity: 5,
-            color: "#eae3c8"
-        },
         excludeFromWiki: 1
     },
     humanite: {
@@ -2565,7 +2518,7 @@ let ores = {
     rejrw: {
         name: "rejrw",
         color: "#ff8a00",
-        chance: 1 / 50000,
+        chance: 1 / 73579,
         maxY: -2,
         minY: -10000,
         str: 4,
@@ -2651,17 +2604,7 @@ let ores = {
         minY: -10000,
         str: 11,
         spawnMsg: "You feel drawn toward a soft, fluffy mass...",
-        excludeFromWiki: 1,
-        particles: {
-            area: {x: 2, y: 2, z: 2},
-            texture: "particle",
-            emitRate: 8,
-            lifetime: 3,
-            count: 30,
-            size: 0.3,
-            centerGravity: 2,
-            color: "#ff9000"
-        }
+        excludeFromWiki: 1
     },
     sussite: {
         name: "Sussite",
@@ -2837,16 +2780,6 @@ let ores = {
         minY: -5000,
         str: 400,
         emissive: {str: 0.5},
-        particles: {
-            area: {x: 0, y: 0, z: 0},
-            texture: "particle",
-            emitRate: 5,
-            lifetime: 6,
-            count: 50,
-            size: 0.4,
-            centerGravity: -2,
-            color: "#c2f3fa"
-        },
         desc: "world's oldest beer, probably tastes like expired applesauce",
         creator: "YeetSnake25",
         spawnMsg: "A strange scent fills the air...",
@@ -2924,16 +2857,6 @@ let ores = {
             col: "#fff",
             str: 10
         },
-        particles: {
-            area: {x: 1, y: 1, z: 1},
-            texture: "particle",
-            emitRate: 50,
-            lifetime: 2,
-            count: 150,
-            size: 0.25,
-            centerGravity: -25,
-            color: "#fff"
-        },
         spawnMsg: "The pure essence of creation has manifested itself into one single stone...",
         excludeFromWiki: 1
     },
@@ -2957,16 +2880,6 @@ let ores = {
             col: "#f00",
             str: 10
         },
-        particles: {
-            area: {x: 5, y: 5, z: 5},
-            texture: "particle",
-            emitRate: 50,
-            lifetime: 2,
-            count: 150,
-            size: 0.25,
-            centerGravity: 25,
-            color: "#f00"
-        },
         spawnMsg: "All that is good must come to an end...",
         excludeFromWiki: 1,
         audio: "destruction.mp3"
@@ -2979,16 +2892,6 @@ let ores = {
         maxY: -2,
         minY: -1000,
         str: 73,
-        particles: {
-            area: {x: 0, y: 0, z: 0},
-            texture: "particle",
-            emitRate: 10,
-            lifetime: 2,
-            count: 50,
-            size: 0.4,
-            centerGravity: -5,
-            color: "#90f"
-        },
         light: {
             col: "#90f",
             str: 2
@@ -3152,16 +3055,6 @@ let ores = {
         light: {
             col: "#2fc98a",
             str: 15
-        },
-        particles: {
-            area: {x: 0, y: 0, z: 0},
-            texture: "particle",
-            emitRate: 100,
-            lifetime: 2,
-            count: 300,
-            size: 0.25,
-            centerGravity: -50,
-            color: "#2fc98a"
         },
         spawnMsg: "The essence of the universe itself has been evinced into an enigmatic, objectified form...",
         excludeFromWiki: 1,

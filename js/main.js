@@ -781,8 +781,13 @@ export async function generateOre(x, y, z, ore, bg, settings) {
             if (output.bg !== undefined) bg = output.bg;
         }
     }
+
+    if (settings.isGeode) {
+        settings.customTexture = {ore: "crystals", bg: null};
+        settings.meshIDPrefix = "geode";
+    }
     
-    let meshID = `${ore}_${settings.customModel ?? bg}`;
+    let meshID = `${settings.meshIDPrefix ? settings.meshIDPrefix + "_" : ""}${ore}_${settings.customModel ?? bg}`;
     const chunk = getChunkKey(x, y, z, MESH_CHUNK_SIZE);
     const chunkSplit = getChunkKey(x, y, z, MESH_CHUNK_SIZE, true).map(a => a * MESH_CHUNK_SIZE);
     meshID += `_${chunk}`;
@@ -844,7 +849,7 @@ export async function generateOre(x, y, z, ore, bg, settings) {
             oreMesh.alphaIndex = 99;
             
             const oreMaterial = new BABYLON.PBRMaterial(`oreMaterial-${x}_${y}_${z}`, scene);
-            oreMaterial.baseColor = oreMaterial.diffuseColor = new BABYLON.Color3(1, 1, 1);
+            oreMaterial.albedoColor = oreMaterial.diffuseColor = new BABYLON.Color3(1, 1, 1);
             oreMaterial.ambientColor = new BABYLON.Color3(1, 1, 1);
             oreMaterial.specularColor = new BABYLON.Color3(0, 0, 0);
             oreMaterial.alphaMode = 2;
@@ -856,7 +861,7 @@ export async function generateOre(x, y, z, ore, bg, settings) {
             if (ores[ore]?.multipleTextures) {
                 for (let i = 0; i < 6; i++) {
                     const mat = new BABYLON.PBRMaterial(`oreMaterial-${x}_${y}_${z}-${i}`, scene);
-                    mat.baseColor = mat.diffuseColor = new BABYLON.Color3(1, 1, 1);
+                    mat.albedoColor = mat.diffuseColor = new BABYLON.Color3(1, 1, 1);
                     mat.ambientColor = new BABYLON.Color3(1, 1, 1);
                     mat.specularColor = new BABYLON.Color3(0, 0, 0);
                     mat.alphaMode = 2;
@@ -872,7 +877,7 @@ export async function generateOre(x, y, z, ore, bg, settings) {
             }
             
             const backgroundMaterial = new BABYLON.PBRMaterial(`backgroundMaterial-${x}_${y}_${z}`, scene);
-            backgroundMaterial.baseColor = backgroundMaterial.diffuseColor = new BABYLON.Color3(1, 1, 1);
+            backgroundMaterial.albedoColor = backgroundMaterial.diffuseColor = settings.bgColor ? color : new BABYLON.Color3(1, 1, 1);
             backgroundMaterial.ambientColor = new BABYLON.Color3(1, 1, 1);
             backgroundMaterial.specularColor = new BABYLON.Color3(0, 0, 0);
             
@@ -880,7 +885,7 @@ export async function generateOre(x, y, z, ore, bg, settings) {
             if (ores[bg]?.multipleTextures) {
                 for (let i = 0; i < 6; i++) {
                     const mat = new BABYLON.PBRMaterial(`backgroundMaterial-${x}_${y}_${z}-${i}`, scene);
-                    mat.baseColor = mat.diffuseColor = new BABYLON.Color3(1, 1, 1);
+                    mat.albedoColor = mat.diffuseColor = new BABYLON.Color3(1, 1, 1);
                     mat.ambientColor = new BABYLON.Color3(1, 1, 1);
                     mat.specularColor = new BABYLON.Color3(0, 0, 0);
                     mat.baseTexture = mat.albedoTexture = getTexture(bg, "ore", i);
@@ -909,19 +914,19 @@ export async function generateOre(x, y, z, ore, bg, settings) {
                     }
                 }
             }
-            oreMaterial.albedoTexture = oreMaterial.baseTexture = getTexture(ore);
-            oreMaterial.opacityTexture = getTexture(ore);
+            oreMaterial.albedoTexture = oreMaterial.baseTexture = getTexture(settings.customTexture?.ore ?? ore);
+            oreMaterial.opacityTexture = getTexture(settings.customTexture?.ore ?? ore);
             if (ores[ore]?.light || ores[ore]?.emissive) {
                 if (!ores[ore]?.multipleTextures)
-                    oreMaterial.emissiveTexture = getTexture(ore, "emissive");
+                    oreMaterial.emissiveTexture = getTexture(settings.customTexture?.ore ?? ore, "emissive");
                 else {
                     for (let i = 0; i < materials.length; i++) {
                         materials[i].emissiveTexture = getTexture(ore, "emissive", i);
                     }
                 }
             }
-            backgroundMaterial.albedoTexture = backgroundMaterial.baseTexture = ores[ore]?.singleLayer ? getTexture(ore) : getTexture(bg);
-            backgroundMaterial.diffuseTexture = getTexture(bg);
+            backgroundMaterial.albedoTexture = backgroundMaterial.baseTexture = ores[ore]?.singleLayer ? getTexture(settings.customTexture?.ore ?? ore) : getTexture(settings.customTexture?.bg ?? bg);
+            backgroundMaterial.diffuseTexture = getTexture(settings.customTexture?.bg ?? bg);
 
             if (ores[ore].disableLighting) {
                 for (const oreMaterial of materials) {

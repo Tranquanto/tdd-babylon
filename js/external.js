@@ -1,5 +1,7 @@
 let sensitivity = localStorage.getItem("sensitivity") || 1;
 
+Math.SQRTPI = Math.sqrt(Math.PI);
+
 Math.lerp = function (a, b, t) {
     // t = (1 - Math.cos(t * Math.PI)) / 2; // Convert to sine easing
     return a + (b - a) * Math.min(Math.max(t, 0), 1);
@@ -73,7 +75,7 @@ function nd(input) {
 
 const _elemCache = {};
 function getElementById(id) {
-    if (_elemCache[id] === undefined) {
+    if (_elemCache[id] === undefined || _elemCache[id] === null) {
         return _elemCache[id] = document.getElementById(id);
     } else {
         return _elemCache[id];

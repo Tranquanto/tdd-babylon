@@ -1124,7 +1124,6 @@ let ores = {
         singleLayer: true,
         desc: "It's... 8-bit?",
         sfx: "stone",
-        excludeFromWiki: 1,
         emissive: {
             str: 1
         },
@@ -1178,8 +1177,7 @@ let ores = {
         str: 3.2,
         singleLayer: true,
         desc: "A mythical, sparkling substance.",
-        sfx: "sand",
-        excludeFromWiki: 1
+        sfx: "sand"
     },
     carpet: {
         name: "Carpet",
@@ -1191,7 +1189,6 @@ let ores = {
         singleLayer: true,
         desc: "wha?",
         sfx: "sand",
-        excludeFromWiki: 1,
         noRandomRotation: true
     },
     emptiness: {
@@ -2108,8 +2105,7 @@ let ores = {
             col: "#00ddff",
             str: 1.2
         },
-        emissive: {str: 0.2},
-        excludeFromWiki: 1
+        emissive: {str: 0.2}
     },
     soap: {
         name: "Soap",
@@ -2388,7 +2384,6 @@ let ores = {
         minY: -16000,
         str: 172,
         desc: "A legendary metal said to possess magical properties.",
-        excludeFromWiki: 1,
         light: {
             col: "#0fb",
             str: 2
@@ -2575,7 +2570,6 @@ let ores = {
         minY: -10000,
         str: 4,
         excludeFromWiki: 1,
-        removalReason: "Originally added as an inside joke, but does not fit thematically.",
         desc: "rejrw",
         emissive: {
             str: 5
@@ -2594,7 +2588,6 @@ let ores = {
         tier: "enigmatic",
         singleLayer: true,
         sfx: "stone",
-        removalReason: "Did not fit in the game thematically; added as a joke",
         conditionLabel: "Only spawns on the surface"
     },
     // epic
@@ -2679,7 +2672,6 @@ let ores = {
         str: 6.66,
         singleLayer: true,
         desc: "this is the worst thing i've ever created",
-        removalReason: "Does not fit in the game thematically",
         excludeFromWiki: 1,
         noGeodeTexture: true,
         sfx: "stone"
@@ -5997,7 +5989,7 @@ for (const ore in ores) {
         };
     }
 
-    if ((ores[ore].minY === undefined || ores[ore].maxY === undefined) && typeof ores[ore].chance === "object" && Array.isArray(ores[ore].chance)) {
+    if ((ores[ore].minY === undefined || ores[ore].maxY === undefined) && Array.isArray(ores[ore].chance)) {
         let min = Infinity;
         let max = -Infinity;
         for (const interval of ores[ore].chance) {

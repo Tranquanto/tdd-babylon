@@ -267,6 +267,25 @@ body {
     cursor: not-allowed;
 }
 
+#vr-btn {
+    background: #90f;
+    color: #307;
+    position: fixed;
+    right: 1dvh;
+    top: 0;
+    width: 20%;
+}
+
+#vr-btn:hover {
+    border-color: #b5f;
+}
+
+#vr-btn:active {
+    border-color: #b5f;
+    background: #307;
+    color: #b5f;
+}
+
 #resetBtn {
     background: #f00;
     color: #600;
@@ -502,14 +521,15 @@ body {
 
 #index-btn {
     position: absolute;
-    top: 0;
-    right: 0;
+    top: 1dvh;
+    right: 1dvw;
     width: 10vw;
     height: 4dvh;
     background: #000;
     color: #fff;
     text-align: center;
     line-height: 4dvh;
+    border: 0.2dvw solid #2e2731;
 }
 
 #index-btn:hover {
@@ -761,7 +781,7 @@ body {
     left: 50%;
     transform: translate(-50%, -50%);
     z-index: 4;
-    max-height: 90dvh;
+    max-height: 70dvh;
     overflow-y: scroll;
     border: 1vw solid #000;
 }

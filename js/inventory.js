@@ -1,6 +1,8 @@
 import { ores, items, recipes, replacedIds, tiers, layers, achievements, achievementArray, animations, getLayer } from './content/items.js';
 import vars, { getBGOre, calculateChance, displayAlert } from './outside_stuff.js';
+
 const GAME_MODE = "normal";
+const minAllowedY = -8000, maxAllowedY = 3000;
 
 class Inventory {
     constructor(max, isNew = false) {
@@ -21,17 +23,17 @@ class Inventory {
             itemCount.classList.add("hotbar-item-count");
             itemCount.innerText = "0";
             div.append(itemCount);
-            document.getElementById(`hotbar-${h}`).append(div);
+            getElementById(`hotbar-${h}`).append(div);
         
-            document.getElementById(`hotbar-${h}`).addEventListener("click", () => {
+            getElementById(`hotbar-${h}`).addEventListener("click", () => {
                 inventory.selectHotbarSlot(h);
                 if (inventory.SELECTED_ITEM) {
                     inventory.selectHotbarSlot(h, true);
                     inventory.setHotbarItem(inventory.SELECTED_ITEM, h);
                     inventory.SELECTED_ITEM = null;
-                    document.getElementById("equip-text").style.display = "none";
-                    document.getElementById("large-inventory").style.display = "block";
-                    document.getElementById("hotbar").classList.remove("big");
+                    getElementById("equip-text").style.display = "none";
+                    getElementById("large-inventory").style.display = "block";
+                    getElementById("hotbar").classList.remove("big");
                 }
             });
         
@@ -73,25 +75,6 @@ class Inventory {
             }
         }
 
-        if (document.getElementById(`inventory-item-${item}`)) {
-            document.getElementById(`inventory-item-${item}`).querySelector(".item-name").innerText = `${formatNum(this.getCount(item))}× ${items[item].name}`;
-        } else {
-            let html = `<div class="item" id="inventory-item-${item}" style="background: ${items[item].color}" onclick="inventory.setHotbarItem('${item}');"><div class="item-name">${formatNum(this.getCount(item))}× ${items[item].name}</div><img class="item-count" src="img/item/${ores[item] && ores[item].customTexture ? ores[item].customTexture.item.src : item}.png" alt="${item}" style="${ores[item] && ores[item].customTexture ? `opacity: 0.5; filter: drop-shadow(0 0 0 ${ores[item].customTexture.item.colorize});` : ""}"></div>`;
-            // add to inventory (keeping alphabetical order)
-            let inserted = false;
-            const inventoryItems = document.getElementById("inventory").children;
-            for (let i = 0; i < inventoryItems.length; i++) {
-                if (!inventoryItems[i].id.includes("inventory-item-")) continue;
-                if (items[inventoryItems[i].id.replace("inventory-item-", "")].name.toLowerCase() > items[item].name.toLowerCase()) {
-                    inventoryItems[i].insertAdjacentHTML("beforebegin", html);
-                    inserted = true;
-                    break;
-                }
-            }
-            loadOreWiki();
-        }
-        // this.print();
-
         if (Math.abs(count) < 1) return true;
         if (!document.getElementsByName(item)[0]) {
             const notif = document.createElement("div");
@@ -115,7 +98,7 @@ class Inventory {
                 notif.remove();
             });
 
-            document.getElementById("inventoryNotif").appendChild(notif);
+            getElementById("inventoryNotif").appendChild(notif);
         } else {
             document.getElementsByName(item)[0].setAttribute("data-count", Number(document.getElementsByName(item)[0].getAttribute("data-count")) + count);
             document.getElementsByName(item)[0].querySelector(".item-name").innerText = `+${Number(document.getElementsByName(item)[0].getAttribute("data-count")).toLocaleString()} ${items[item].name}`.replace("+-", "-");
@@ -129,8 +112,8 @@ class Inventory {
     removeItem(item, count) {
         this.addItem(item, -count);
         if (this.getCount(item) <= 0) {
-            if (document.getElementById(`inventory-item-${item}`)) document.getElementById(`inventory-item-${item}`).remove();
-            if (document.getElementById(`large-inventory-item-${item}`)) document.getElementById(`large-inventory-item-${item}`).remove();
+            if (getElementById(`inventory-item-${item}`)) getElementById(`inventory-item-${item}`).remove();
+            if (getElementById(`large-inventory-item-${item}`)) getElementById(`large-inventory-item-${item}`).remove();
         }
     }
 
@@ -205,25 +188,25 @@ class Inventory {
         if (c) {
             for (const input of recipe.input) {
                 this.removeItem(input.id, input.count * c);
-                if (document.getElementById(`large-inventory-item-${input.id}`)) {
-                    document.getElementById(`large-inventory-item-${input.id}`).querySelector(".large-item-count").innerText = formatNum(this.getCount(input.id));
+                if (getElementById(`large-inventory-item-${input.id}`)) {
+                    getElementById(`large-inventory-item-${input.id}`).querySelector(".large-item-count").innerText = formatNum(this.getCount(input.id));
                     if (this.getCount(input.id) <= 0) {
-                        document.getElementById(`large-inventory-item-${input.id}`).remove();
+                        getElementById(`large-inventory-item-${input.id}`).remove();
                     }
                 }
             }
             this.addItem(recipe.output.id, recipe.output.count * c);
             this.largePrint();
         }
-        if (document.getElementById(`large-inventory-item-${recipe.output.id}`)) {
-            document.getElementById(`large-inventory-item-${recipe.output.id}`).querySelector(".large-item-count").innerText = formatNum(this.getCount(recipe.output.id));
+        if (getElementById(`large-inventory-item-${recipe.output.id}`)) {
+            getElementById(`large-inventory-item-${recipe.output.id}`).querySelector(".large-item-count").innerText = formatNum(this.getCount(recipe.output.id));
         } else {
             const color = items[recipe.output.id].color;
             const bg = `background-image: url(img/item/${ores[recipe.output.id] && ores[recipe.output.id].customTexture ? ores[recipe.output.id].customTexture.item.src : recipe.output.id}.png)`;
             if (color[0] === "#") bg += `; background-color: ${color};`;
             else bg += `, ${color};`;
             let html = `<div class="large-item" id="large-inventory-item-${recipe.output.id}" style="${bg}" onclick="inventory.setHotbarItem('${recipe.output.id}');"><div class="large-item-name">${formatNum(this.getCount(recipe.output.id))}× ${items[recipe.output.id].name}</div><div class="large-item-count">${this.getCount(recipe.output.id).toLocaleString()}</div></div>`;
-            document.getElementById("large-inventory").insertAdjacentHTML("beforeend", html);
+            getElementById("large-inventory").insertAdjacentHTML("beforeend", html);
         }
     }
 
@@ -237,24 +220,24 @@ class Inventory {
             this.print();
         }
         this.afterItemCheck();
-        document.getElementById("cursor").setAttribute("raycaster", `objects: .ore; far: ${Math.min(this.currentPickaxe.range, 10000)};`);
+        getElementById("cursor").setAttribute("raycaster", `objects: .ore; far: ${Math.min(this.currentPickaxe.range, 10000)};`);
         localStorage.setItem(`hotbar-${GAME_MODE}`, JSON.stringify(this.hotbar));
     }
 
     selectHotbarSlot(s, forced = false) {
         this.beforeItemCheck();
         this.currentPickaxe = {power: 0.25, range: 5, delay: 0.3, color: "#efb77d"};
-        if (this.SELECTED_HOTBAR !== -1) document.getElementById(`hotbar-${this.SELECTED_HOTBAR}`).classList.remove("hotbar-item-selected");
+        if (this.SELECTED_HOTBAR !== -1) getElementById(`hotbar-${this.SELECTED_HOTBAR}`).classList.remove("hotbar-item-selected");
         if (this.SELECTED_HOTBAR !== s || forced) {
             this.SELECTED_HOTBAR = s;
         } else {
             this.SELECTED_HOTBAR = -1;
         }
         if (this.SELECTED_HOTBAR !== -1) {
-            document.getElementById(`hotbar-${this.SELECTED_HOTBAR}`).classList.add("hotbar-item-selected");
+            getElementById(`hotbar-${this.SELECTED_HOTBAR}`).classList.add("hotbar-item-selected");
         }
         this.afterItemCheck();
-        document.getElementById("cursor").setAttribute("raycaster", `objects: .ore; far: ${Math.min(this.currentPickaxe.range, 10000)};`);
+        getElementById("cursor").setAttribute("raycaster", `objects: .ore; far: ${Math.min(this.currentPickaxe.range, 10000)};`);
     }
 
     print() {
@@ -279,32 +262,23 @@ class Inventory {
             this.items.splice(this.items.indexOf(item), 1);
         }
 
-        let html = '<div class="divider item" style="background-color: #000000;">Items</div>';
-        this.items.sort((a, b) => items[b.item].name.toLowerCase() < items[a.item].name.toLowerCase() ? 1 : -1);
-        this.items.forEach(i => {
-            if (i.count > 0) {
-                // noinspection CssUnknownTarget
-                html += `<div class="item" id="inventory-item-${i.item}" style="background: ${items[i.item].color}" onclick="inventory.setHotbarItem('${i.item}');"><div class="item-name">${formatNum(i.count)}× ${items[i.item].name}</div><img class="item-count" src="img/item/${ores[i.item] && ores[i.item].customTexture ? ores[i.item].customTexture.item.src : i.item}.png" alt="${i.item}" style="${ores[i.item] && ores[i.item].customTexture ? `opacity: 0.5; filter: drop-shadow(0 0 0 ${ores[i.item].customTexture.item.colorize});` : ""}"></div>`;
-            }
-        });
         for (let h in this.hotbar) {
             if (typeof this.hotbar[h] === "string" && items[this.hotbar[h]]) {
                 if (items[this.hotbar[h]].color[0] === "#") {
-                    document.getElementById(`hotbar-${h}`).style.backgroundColor = items[this.hotbar[h]].color;
-                    document.getElementById(`hotbar-${h}`).style.backgroundImage = `url(img/item/${ores[this.hotbar[h]] && ores[this.hotbar[h]].customTexture ? ores[this.hotbar[h]].customTexture.item.src : this.hotbar[h]}.png)`;
+                    getElementById(`hotbar-${h}`).style.backgroundColor = items[this.hotbar[h]].color;
+                    getElementById(`hotbar-${h}`).style.backgroundImage = `url(img/item/${ores[this.hotbar[h]] && ores[this.hotbar[h]].customTexture ? ores[this.hotbar[h]].customTexture.item.src : this.hotbar[h]}.png)`;
                 } else {
-                    document.getElementById(`hotbar-${h}`).style.backgroundImage = `url(img/item/${ores[this.hotbar[h]] && ores[this.hotbar[h]].customTexture ? ores[this.hotbar[h]].customTexture.item.src : this.hotbar[h]}.png), ${items[this.hotbar[h]].color}`;
+                    getElementById(`hotbar-${h}`).style.backgroundImage = `url(img/item/${ores[this.hotbar[h]] && ores[this.hotbar[h]].customTexture ? ores[this.hotbar[h]].customTexture.item.src : this.hotbar[h]}.png), ${items[this.hotbar[h]].color}`;
                 }
-                document.getElementById(`hotbar-${h}`).setAttribute("name", this.hotbar[h] + "-hotbar");
+                getElementById(`hotbar-${h}`).setAttribute("name", this.hotbar[h] + "-hotbar");
             } else {
-                document.getElementById(`hotbar-${h}`).style.backgroundColor = "#0008";
-                document.getElementById(`hotbar-${h}`).style.backgroundImage = "none";
-                document.getElementById(`hotbar-${h}`).removeAttribute("name");
+                getElementById(`hotbar-${h}`).style.backgroundColor = "#0008";
+                getElementById(`hotbar-${h}`).style.backgroundImage = "none";
+                getElementById(`hotbar-${h}`).removeAttribute("name");
             }
 
-            if (document.getElementById(`hotbar-${h}`).querySelector(".hotbar-item-count")) document.getElementById(`hotbar-${h}`).querySelector(".hotbar-item-count").innerText = formatNum(this.getCount(this.hotbar[h]), 2, 1e4);
+            if (getElementById(`hotbar-${h}`).querySelector(".hotbar-item-count")) getElementById(`hotbar-${h}`).querySelector(".hotbar-item-count").innerText = formatNum(this.getCount(this.hotbar[h]), 2, 1e4);
         }
-        document.getElementById("inventory").innerHTML = html;
     }
 
     largePrint() { // for fullscreen inventory view
@@ -312,7 +286,7 @@ class Inventory {
         let itemContainer;
         let ITEMS_APPENDED = false;
         // first do items
-        if (!document.getElementById("large-inventory-header-items")) {
+        if (!getElementById("large-inventory-header-items")) {
             const header = document.createElement("span");
             header.classList.add("large-inventory-header");
             header.innerText = "Items";
@@ -339,7 +313,7 @@ class Inventory {
             });
             itemContainer.appendChild(filter);
         } else {
-            itemContainer = document.getElementById("large-inventory-items");
+            itemContainer = getElementById("large-inventory-items");
             ITEMS_APPENDED = true;
         }
         for (const item of this.items) {
@@ -352,7 +326,7 @@ class Inventory {
             if (!itemData) this.items.splice(this.items.indexOf(item), 1);
 
             if (item.count > 0) {
-                if (!document.getElementById(`large-inventory-item-${item.item}`)) {
+                if (!getElementById(`large-inventory-item-${item.item}`)) {
                     const itemDiv = document.createElement("div");
                     itemDiv.classList.add("large-item");
                     itemDiv.id = `large-inventory-item-${item.item}`;
@@ -364,9 +338,9 @@ class Inventory {
                         itemDiv.style.backgroundImage = `url(img/item/${ores[item.item] && ores[item.item].customTexture ? ores[item.item].customTexture.item.src : item.item}.png), ${itemData.color}`;
                     }
                     itemDiv.addEventListener("click", () => {
-                        document.getElementById("equip-text").style.display = "";
-                        document.getElementById("large-inventory").style.display = "none";
-                        document.getElementById("hotbar").classList.add("big");
+                        getElementById("equip-text").style.display = "";
+                        getElementById("large-inventory").style.display = "none";
+                        getElementById("hotbar").classList.add("big");
                         this.SELECTED_ITEM = item.item;
                     });
                     itemDiv.addEventListener("contextmenu", () => {
@@ -429,14 +403,14 @@ class Inventory {
                         }
                     }
                 } else {
-                    document.getElementById(`large-inventory-item-${item.item}`).querySelector(".large-item-count").innerText = formatNum(item.count);
+                    getElementById(`large-inventory-item-${item.item}`).querySelector(".large-item-count").innerText = formatNum(item.count);
                 }
-            } else if (document.getElementById(`large-inventory-item-${item.item}`)) {
-                document.getElementById(`large-inventory-item-${item.item}`).remove();
+            } else if (getElementById(`large-inventory-item-${item.item}`)) {
+                getElementById(`large-inventory-item-${item.item}`).remove();
             }
         }
         if (!ITEMS_APPENDED) div.appendChild(itemContainer);
-        if (!document.getElementById("large-inventory-separator")) {
+        if (!getElementById("large-inventory-separator")) {
             const br = document.createElement("br");
             br.id = "large-inventory-separator";
 
@@ -446,7 +420,7 @@ class Inventory {
 
         // recipes
         let recipesDiv, RECIPES_APPENDED = false;
-        if (!document.getElementById("large-inventory-header-recipes")) {
+        if (!getElementById("large-inventory-header-recipes")) {
             const header2 = document.createElement("span");
             header2.classList.add("large-inventory-header");
             header2.innerText = "Recipes";
@@ -476,12 +450,12 @@ class Inventory {
 
             recipesDiv.appendChild(filter);
         } else {
-            recipesDiv = document.getElementById("large-inventory-recipes");
+            recipesDiv = getElementById("large-inventory-recipes");
             RECIPES_APPENDED = true;
         }
         for (const r in recipes) {
             const recipe = recipes[r];
-            if (!document.getElementById(`large-inventory-recipe-${r}`)) {
+            if (!getElementById(`large-inventory-recipe-${r}`)) {
                 if (!this.hasAtLeastOneIngredient(recipe)) continue;
                 const recipeDiv = document.createElement("div");
                 recipeDiv.classList.add("large-item");
@@ -497,7 +471,7 @@ class Inventory {
                 recipeDiv.addEventListener("click", () => {
                     // this.craft(recipe);
                     // create a new menu with recipe details
-                    const gui = document.getElementById("big-gui");
+                    const gui = getElementById("big-gui");
                     gui.innerHTML = "";
                     gui.style.width = "";
                     gui.style.display = "block";
@@ -623,7 +597,7 @@ class Inventory {
                     }
                 }
             } else {
-                const recipeDiv = document.getElementById(`large-inventory-recipe-${r}`);
+                const recipeDiv = getElementById(`large-inventory-recipe-${r}`);
                 if (!this.hasAtLeastOneIngredient(recipe)) {
                     recipeDiv.remove();
                     continue;
@@ -635,7 +609,7 @@ class Inventory {
             div.appendChild(recipesDiv);
         }
 
-        if (div.innerHTML !== "") document.getElementById("large-inventory").appendChild(div);
+        if (div.innerHTML !== "") getElementById("large-inventory").appendChild(div);
     }
 
     beforeItemCheck() {
@@ -662,7 +636,7 @@ class Inventory {
 let inventory = new Inventory(Infinity);
 
 function sortWikiList() {
-    let wikiList = document.getElementById("ore-wiki-list");
+    let wikiList = getElementById("ore-wiki-list");
     let wikiListItems = Array.from(wikiList.children);
     wikiListItems.sort((a, b) => {
         if (a.classList.contains("undiscovered")) return 1;
@@ -681,11 +655,11 @@ function sortWikiList() {
 
 export function toggleInventory() {
     if (document.exitPointerLock) document.exitPointerLock();
-    if (document.getElementById("large-inventory").style.display === "none") {
-        document.getElementById("large-inventory").style.display = "block";
+    if (getElementById("large-inventory").style.display === "none") {
+        getElementById("large-inventory").style.display = "block";
         inventory.largePrint();
     }
-    else document.getElementById("large-inventory").style.display = "none";
+    else getElementById("large-inventory").style.display = "none";
 }
 
 function openOre(ore) { // open wiki page
@@ -697,8 +671,8 @@ function openOre(ore) { // open wiki page
     closeButton.className = "closeButton";
     closeButton.innerText = "×";
     closeButton.addEventListener("click", () => {
-        document.getElementById("ore-wiki").style.display = "none";
-        document.getElementById("ore-wiki").innerHTML = "";
+        getElementById("ore-wiki").style.display = "none";
+        getElementById("ore-wiki").innerHTML = "";
     });
     oreInfo.appendChild(closeButton);
 
@@ -796,7 +770,6 @@ function openOre(ore) { // open wiki page
     let minY = Infinity;
     let maxY = -Infinity;
     let sampledPoints = [];
-    const minAllowedY = -11000, maxAllowedY = 3000;
     if (typeof oreData.chance === "object") {
         if (Array.isArray(oreData.chance)) {
             for (const interval of oreData.chance) {
@@ -939,7 +912,7 @@ function openOre(ore) { // open wiki page
         if (nearest) {
             // Create or get the highlight overlay canvas
             let overlayId = "rarityGraphOverlay";
-            let overlay = document.getElementById(overlayId);
+            let overlay = getElementById(overlayId);
             if (!overlay) {
                 overlay = document.createElement("canvas");
                 overlay.className = "wikiGraph";
@@ -985,11 +958,11 @@ function openOre(ore) { // open wiki page
 
     rarityGraph.addEventListener("mouseleave", () => {
         tooltip.style.display = "none";
-        document.getElementById("rarityGraphOverlay")?.remove();
+        getElementById("rarityGraphOverlay")?.remove();
     });
     rarityGraph.addEventListener("touchend", () => {
         tooltip.style.display = "none";
-        document.getElementById("rarityGraphOverlay")?.remove();
+        getElementById("rarityGraphOverlay")?.remove();
     });
 
     oreInfo.appendChild(rarityGraph);
@@ -1048,9 +1021,9 @@ function openOre(ore) { // open wiki page
     }
     oreInfo.appendChild(textStuff);
 
-    document.getElementById("ore-wiki").innerHTML = "";
-    document.getElementById("ore-wiki").appendChild(oreInfo);
-    document.getElementById("ore-wiki").style.display = "block";
+    getElementById("ore-wiki").innerHTML = "";
+    getElementById("ore-wiki").appendChild(oreInfo);
+    getElementById("ore-wiki").style.display = "block";
 }
 
 function openItem(i) {
@@ -1061,8 +1034,8 @@ function openItem(i) {
     closeButton.className = "closeButton";
     closeButton.innerText = "×";
     closeButton.addEventListener("click", () => {
-        document.getElementById("ore-wiki").style.display = "none";
-        document.getElementById("ore-wiki").innerHTML = "";
+        getElementById("ore-wiki").style.display = "none";
+        getElementById("ore-wiki").innerHTML = "";
     });
     wiki.appendChild(closeButton);
 
@@ -1078,18 +1051,18 @@ function openItem(i) {
     desc.innerText = item.desc;
     wiki.appendChild(desc);
 
-    document.getElementById("ore-wiki").innerHTML = "";
-    document.getElementById("ore-wiki").appendChild(wiki);
-    document.getElementById("ore-wiki").style.display = "block";
+    getElementById("ore-wiki").innerHTML = "";
+    getElementById("ore-wiki").appendChild(wiki);
+    getElementById("ore-wiki").style.display = "block";
 }
 
 function loadOreWiki() {
-    document.getElementById("ore-wiki-list").innerHTML = "";
+    getElementById("ore-wiki-list").innerHTML = "";
     // sort ores by name (probably not the best way to do it but if it works it works)
     let sortedOres = Object.keys(ores).sort((a, b) => ores[a].name.toLowerCase() < ores[b].name.toLowerCase() ? -1 : 1);
     let undiscovered = 0;
     for (const ore of sortedOres) {
-        if (ores[ore].excludeFromWiki === 2) continue;
+        if (ores[ore].excludeFromWiki === 2 || ores[ore].minY > maxAllowedY || ores[ore].maxY < minAllowedY) continue;
         // list
         let oreData = ores[ore];
         let listItem = document.createElement("div");
@@ -1114,7 +1087,7 @@ function loadOreWiki() {
             }
         }
         if (!(inventory.getCount(ore) === false && ores[ore].excludeFromWiki))
-            document.getElementById("ore-wiki-list").appendChild(listItem);
+            getElementById("ore-wiki-list").appendChild(listItem);
     }
     if (undiscovered > 0) {
         let undiscoveredDiv = document.createElement("div");
@@ -1123,7 +1096,7 @@ function loadOreWiki() {
         undiscoveredDiv.style.backgroundColor = "#000";
         undiscoveredDiv.style.color = "#fff";
         undiscoveredDiv.innerHTML = `<span class="item-name">${undiscovered} undiscovered</span>`;
-        document.getElementById("ore-wiki-list").appendChild(undiscoveredDiv);
+        getElementById("ore-wiki-list").appendChild(undiscoveredDiv);
     }
 
     sortWikiList();
@@ -1147,12 +1120,12 @@ function loadItemWiki() {
 
         div.append(name, img);
         div.addEventListener("click", () => openItem(i));
-        document.getElementById("item-wiki-list").appendChild(div);
+        getElementById("item-wiki-list").appendChild(div);
     }
 }
 
 function loadLayerWiki() {
-    document.getElementById("layer-wiki-list").innerHTML = "";
+    getElementById("layer-wiki-list").innerHTML = "";
     for (const l of Object.keys(layers)) {
         const layer = layers[l];
         
@@ -1170,7 +1143,7 @@ function loadLayerWiki() {
 
         div.append(name, item);
 
-        document.getElementById("layer-wiki-list").appendChild(div);
+        getElementById("layer-wiki-list").appendChild(div);
 
         div.addEventListener("click", () => {
             const wiki = document.createElement("div");
@@ -1179,8 +1152,8 @@ function loadLayerWiki() {
             closeButton.className = "closeButton";
             closeButton.innerText = "×";
             closeButton.addEventListener("click", () => {
-                document.getElementById("ore-wiki").style.display = "none";
-                document.getElementById("ore-wiki").innerHTML = "";
+                getElementById("ore-wiki").style.display = "none";
+                getElementById("ore-wiki").innerHTML = "";
             });
             wiki.appendChild(closeButton);
 
@@ -1195,9 +1168,9 @@ function loadLayerWiki() {
             desc.classList.add("wikiOtherDetails");
             desc.innerText = layer.desc;
             
-            document.getElementById("ore-wiki").innerHTML = "";
-            document.getElementById("ore-wiki").appendChild(wiki);
-            document.getElementById("ore-wiki").style.display = "block";
+            getElementById("ore-wiki").innerHTML = "";
+            getElementById("ore-wiki").appendChild(wiki);
+            getElementById("ore-wiki").style.display = "block";
         });
     }
 }
@@ -1210,7 +1183,7 @@ function loadAchievements() {
         }
     } catch {}
 
-    document.getElementById("achievements-list").innerHTML = "";
+    getElementById("achievements-list").innerHTML = "";
     for (const a of Object.keys(achievements)) {
         const achievement = achievements[a];
         if (achievement.disabled || achievement.preReq?.some(p => !achievements[p].unlocked)) continue;
@@ -1232,7 +1205,7 @@ function loadAchievements() {
         img.src = `img/item/${achievement.icon || "trophy"}.png`;
         div.append(name, img);
 
-        document.getElementById("achievements-list").appendChild(div);
+        getElementById("achievements-list").appendChild(div);
     }
 }
 
@@ -1255,7 +1228,7 @@ function updateAchievements() {
             unlockedCount++;
         }
 
-        const elem = document.getElementById(`achievement-${a.id}`);
+        const elem = getElementById(`achievement-${a.id}`);
         if (!elem) continue;
         if (a.unlocked) {
             elem.classList.add("unlocked");

@@ -1,51 +1,51 @@
 import vars from "./outside_stuff.js";
 import { resize } from "./main.js";
 
-document.getElementById("play-btn").addEventListener("click", () => {
-    document.getElementById("main-menu").style.display = "none";
-    document.getElementById("play-menu").style.display = "block";
+getElementById("play-btn").addEventListener("click", () => {
+    getElementById("main-menu").style.display = "none";
+    getElementById("play-menu").style.display = "block";
 });
 
-document.getElementById("play-back").addEventListener("click", () => {
-    document.getElementById("main-menu").style.display = "block";
-    document.getElementById("play-menu").style.display = "none";
+getElementById("play-back").addEventListener("click", () => {
+    getElementById("main-menu").style.display = "block";
+    getElementById("play-menu").style.display = "none";
 });
-document.getElementById("play-normal").addEventListener("click", () => {
+getElementById("play-normal").addEventListener("click", () => {
     vars.PAUSED = false;
     vars.hasPlayed = true;
-    document.getElementById("bgm").play();
-    document.getElementById("play-menu").style.display = "none";
-    document.getElementById("logo-container").style.visibility = "hidden";
+    getElementById("bgm").play();
+    getElementById("play-menu").style.display = "none";
+    getElementById("logo-container").style.visibility = "hidden";
 });
 
-document.getElementById("settings-btn").addEventListener("click", () => {
-    document.getElementById("main-menu").style.display = "none";
-    document.getElementById("settings-menu").style.display = "block";
+getElementById("settings-btn").addEventListener("click", () => {
+    getElementById("main-menu").style.display = "none";
+    getElementById("settings-menu").style.display = "block";
 });
-document.getElementById("settings-sensitivity").addEventListener("input", e => {
+getElementById("settings-sensitivity").addEventListener("input", e => {
     vars.settings.sensitivity = Number(e.target.value);
     updateSetting("sensitivity");
 });
-document.getElementById("settings-music").addEventListener("input", e => {
+getElementById("settings-music").addEventListener("input", e => {
     vars.settings.music = Number(e.target.value);
     updateSetting("music");
 });
-document.getElementById("settings-oreSound").addEventListener("input", e => {
+getElementById("settings-oreSound").addEventListener("input", e => {
     vars.settings.oreSound = Number(e.target.value);
     // listener.setMasterVolume(vars.settings.oreSound);
     updateSetting("oreSound");
 });
-document.getElementById("settings-username").addEventListener("click", () => {
+getElementById("settings-username").addEventListener("click", () => {
     localStorage.removeItem("username");
-    document.getElementById("settings-username").disabled = true;
-    document.getElementById("settings-username").innerText = "Username reset. Please refresh the page.";
+    getElementById("settings-username").disabled = true;
+    getElementById("settings-username").innerText = "Username reset. Please refresh the page.";
 });
-document.getElementById("settings-resolutionScale").addEventListener("input", e => {
+getElementById("settings-resolutionScale").addEventListener("input", e => {
     vars.settings.resolutionScale = Number(e.target.value);
     localStorage.setItem("resolutionScale", vars.settings.resolutionScale);
     updateSetting("resolutionScale", false);
 });
-/* document.getElementById("settings-shadows").addEventListener("click", () => {
+/* getElementById("settings-shadows").addEventListener("click", () => {
     if (vars.settings.shadows === undefined) vars.settings.shadows = true;
     vars.settings.shadows = !vars.settings.shadows;
     localStorage.setItem("shadows", vars.settings.shadows);
@@ -53,12 +53,12 @@ document.getElementById("settings-resolutionScale").addEventListener("input", e 
     vars.renderer.shadowMap.enabled = vars.settings.shadows;
     vars.renderer.compile(vars.scene, vars.perspectiveCamera);
 });
-document.getElementById("settings-shadowMapSize").addEventListener("input", e => {
+getElementById("settings-shadowMapSize").addEventListener("input", e => {
     vars.settings.shadowMapSize = 2 ** Number(e.target.value);
     localStorage.setItem("shadowMapSize", vars.settings.shadowMapSize);
     updateSetting("shadowMapSize", false);
 }); */
-document.getElementById("resetBtn").addEventListener("click", () => {
+getElementById("resetBtn").addEventListener("click", () => {
     if (
         confirm('Are you sure you want to reset?')
         && confirm('Are you REALLY sure?')
@@ -95,52 +95,52 @@ document.getElementById("resetBtn").addEventListener("click", () => {
         }
     }
 });
-document.getElementById("settings-back").addEventListener("click", () => {
-    document.getElementById("main-menu").style.display = "block";
-    document.getElementById("settings-menu").style.display = "none";
+getElementById("settings-back").addEventListener("click", () => {
+    getElementById("main-menu").style.display = "block";
+    getElementById("settings-menu").style.display = "none";
 });
 
-document.getElementById("credits-btn").addEventListener("click", () => {
-    document.getElementById("main-menu").style.display = "none";
-    document.getElementById("credits-menu").style.display = "block";
+getElementById("credits-btn").addEventListener("click", () => {
+    getElementById("main-menu").style.display = "none";
+    getElementById("credits-menu").style.display = "block";
 });
-document.getElementById("credits-back").addEventListener("click", () => {
-    document.getElementById("main-menu").style.display = "block";
-    document.getElementById("credits-menu").style.display = "none";
+getElementById("credits-back").addEventListener("click", () => {
+    getElementById("main-menu").style.display = "block";
+    getElementById("credits-menu").style.display = "none";
 });
 
-document.getElementById("changelog-btn").addEventListener("click", () => {
+getElementById("changelog-btn").addEventListener("click", () => {
     window.open("changelog.html", "_blank");
 });
 
-document.getElementById("controls-btn").addEventListener("click", () => {
-    document.getElementById("main-menu").style.display = "none";
-    document.getElementById("controls").style.display = "block";
+getElementById("controls-btn").addEventListener("click", () => {
+    getElementById("main-menu").style.display = "none";
+    getElementById("controls").style.display = "block";
 });
-document.getElementById("controls-back").addEventListener("click", () => {
-    document.getElementById("main-menu").style.display = "block";
-    document.getElementById("controls").style.display = "none";
+getElementById("controls-back").addEventListener("click", () => {
+    getElementById("main-menu").style.display = "block";
+    getElementById("controls").style.display = "none";
 });
 
-document.getElementById("exit-btn").addEventListener("click", () => {
+getElementById("exit-btn").addEventListener("click", () => {
     window.location = "../..";
 });
 
-document.getElementById("index-btn").addEventListener("click", () => {
-    if (document.getElementById("indexes").style.display === "block")
-        document.getElementById("indexes").style.display = "none";
-    else document.getElementById("indexes").style.display = "block";
+getElementById("index-btn").addEventListener("click", () => {
+    if (getElementById("indexes").style.display === "block")
+        getElementById("indexes").style.display = "none";
+    else getElementById("indexes").style.display = "block";
 });
 for (const cat of ["ore-wiki"/*, "item-wiki", "layer-wiki", "biome-wiki"*/, "achievements"]) {
-    document.getElementById(`${cat}-btn`).addEventListener("click", () => {
-        if (document.getElementById(`${cat}-list`).style.display === "block")
-            document.getElementById(`${cat}-list`).style.display = "none";
-        else document.getElementById(`${cat}-list`).style.display = "block";
-        document.getElementById("indexes").style.display = "none"
+    getElementById(`${cat}-btn`).addEventListener("click", () => {
+        if (getElementById(`${cat}-list`).style.display === "block")
+            getElementById(`${cat}-list`).style.display = "none";
+        else getElementById(`${cat}-list`).style.display = "block";
+        getElementById("indexes").style.display = "none"
     });
 }
 
-document.getElementById("dpad-fullscreen").addEventListener("click", () => {
+getElementById("dpad-fullscreen").addEventListener("click", () => {
     if (document.fullscreenElement) {
         document.exitFullscreen().catch(err => {
             console.error("Error exiting fullscreen:", err);
@@ -152,9 +152,24 @@ document.getElementById("dpad-fullscreen").addEventListener("click", () => {
     }
 });
 
+getElementById("vr-btn").addEventListener("click", async () => {
+    /** @type {BABYLON.WebXRExperienceHelper} */
+    const xrHelper = vars.xrHelper;
+    if (xrHelper !== undefined) {
+        /** @type {BABYLON.WebXRSessionManager} */
+
+        if (xrHelper.state === BABYLON.WebXRState.IN_XR) {
+            await xrHelper.exitXRAsync();
+        } else if (xrHelper.state === BABYLON.WebXRState.NOT_IN_XR) {
+            const sessionManager = await xrHelper.enterXRAsync("immersive-vr", "local-floor");
+            console.log(sessionManager);
+        }
+    }
+});
+
 if (location.origin.includes("localhost")) {
-    document.getElementById("dpad-console").style.display = "inline-flex";
-    document.getElementById("dpad-console").addEventListener("click", () => {
+    getElementById("dpad-console").style.display = "inline-flex";
+    getElementById("dpad-console").addEventListener("click", () => {
         document.dispatchEvent(new KeyboardEvent('keydown', {code: 'F2'}));
     });
 }
@@ -187,7 +202,7 @@ vars.canvasFilter = {
         reset: 1
     },
     update() {
-        return document.getElementById("canvas").style.filter = Object.keys(vars.canvasFilter)
+        return getElementById("canvas").style.filter = Object.keys(vars.canvasFilter)
         .filter(g => !vars.canvasFilter.exclude[g])
         .map(g => {
             if (/[A-Z]/.test(g)) {
@@ -223,29 +238,29 @@ export function updateSetting(setting, percent = true, updateSlider) {
 
     localStorage.setItem(setting, vars.settings[setting]);
     if (setting === "sensitivity") controls.pointerSpeed = Number(vars.settings[setting]);
-    if (setting === "music") document.getElementById("bgm").volume = Number(vars.settings[setting]);
-    document.getElementById(`settings-${setting}-label`).innerText = `${names[setting]}: ${percent ? Math.round(Number(vars.settings[setting]) * 100) + "%" : Number(vars.settings[setting])}`;
+    if (setting === "music") getElementById("bgm").volume = Number(vars.settings[setting]);
+    getElementById(`settings-${setting}-label`).innerText = `${names[setting]}: ${percent ? Math.round(Number(vars.settings[setting]) * 100) + "%" : Number(vars.settings[setting])}`;
     if (setting === "resolutionScale") {
         if (vars.settings[setting] > 1) {
-            document.getElementById(`settings-${setting}-label`).innerText += " (!)";
+            getElementById(`settings-${setting}-label`).innerText += " (!)";
         }
         resize();
     }
 
     /*
     if (setting === "shadowMapSize") {
-        document.getElementById(`settings-${setting}`).max = Math.log2(renderer.capabilities.maxTextureSize);
+        getElementById(`settings-${setting}`).max = Math.log2(renderer.capabilities.maxTextureSize);
     }
 
     if (updateSlider) {
         if (setting === "shadowMapSize") {
-            document.getElementById(`settings-${setting}`).value = Math.log2(vars.settings[setting]);
+            getElementById(`settings-${setting}`).value = Math.log2(vars.settings[setting]);
         } else {
-            document.getElementById(`settings-${setting}`).value = vars.settings[setting];
+            getElementById(`settings-${setting}`).value = vars.settings[setting];
         }
     } else {
         if (setting === "maxLights" && vars.settings[setting] !== lights.length || vars.settings.shadowMapSize !== Number(directionalLight.shadow.mapSize.width)) {
-            document.getElementById(`settings-${setting}-label`).innerText += " (Requires Refresh)";
+            getElementById(`settings-${setting}-label`).innerText += " (Requires Refresh)";
         }
     }
     */

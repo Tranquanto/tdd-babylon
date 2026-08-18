@@ -6,7 +6,7 @@ export const deathMessages = {
         "%s experienced a sudden increase in temperature"
     ],
     cactus: [
-        "%s stood on a cactus... for some reason",
+        "%s cuddled a cactus for some reason",
         "%s tried to hug a cactus",
         "%s thought cacti were soft"
     ],

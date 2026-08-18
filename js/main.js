@@ -1,6 +1,6 @@
 import vars from "./vars.js";
 import { getOre, map, oreAt, checkAdjacent, calculatePower, airAt, calculateRarity, chunks, getBGOre, breakMap, k } from "./outside_stuff.js";
-import { getLayer, items, layers, locations, oreArray, ores, structureArray, structures, tiers, traits, sfxOptions } from "./content/items.js";
+import { getLayer, items, layers, locations, oreArray, ores, structureArray, structures, tiers, traits, sfxOptions, achievementArray } from "./content/items.js";
 import { biomes, getBiomeNumber, getHumidity, getTemperature, topLayer } from "./content/layers.js";
 import { isCave, CHUNK3_RATE, CHUNK_SIZE_3, CHUNK_SIZE, noise, isCaveFloor, isCaveCeiling } from "./noise.js";
 import { inventory, toggleInventory, unlockAchievement } from "./inventory.js";
@@ -30,11 +30,13 @@ let USE_THIN_INSTANCES = true;
 let totalOres = 0;
 let GUI_HIDDEN = false;
 
+const VEIN_CHANCE = 1 / 150, GEODE_CHANCE = 1 / 2000;
+
 // set up scene and camera
 const engine = navigator.gpu ? new BABYLON.Engine(canvas, true, {useLargeWorldRendering: true}) : new BABYLON.Engine(canvas, true, {useLargeWorldRendering: true});
 if (engine.initAsync !== undefined) await engine.initAsync();
 const scene = new BABYLON.Scene(engine);
-const perspectiveCamera = new BABYLON.UniversalCamera("camera1", new BABYLON.Vector3(0, 2, 0), scene);
+let perspectiveCamera = new BABYLON.UniversalCamera("camera1", new BABYLON.Vector3(0, 2, 0), scene);
 perspectiveCamera.maxZ = 1000;
 perspectiveCamera.minZ = 0.1;
 perspectiveCamera.fov = 1.2;
@@ -43,8 +45,30 @@ scene.fogDensity = 0.01;
 scene.fogMode = BABYLON.Scene.FOGMODE_EXP2;
 scene.useRightHandedSystem = true;
 
+// vr :eyes:
+let vrEnabled = true;
+try {
+    const xr = await scene.createDefaultXRExperienceAsync({disableTeleportation: true, disableDefaultUI: true});
+    xr.baseExperience.onStateChangedObservable.add(e => {
+        console.log(e);
+    });
+    vars.xr = xr;
+    vars.xrHelper = xr.baseExperience;
+} catch (e) {
+    vrEnabled = false;
+    console.log("WebXR not detected.");
+}
+
+if (vrEnabled) {
+    console.log("WebXR has been detected and enabled!");
+}
+
 vars.scene = scene;
 vars.perspectiveCamera = perspectiveCamera;
+
+/** @type {BABYLON.WebXRDefaultExperience} */
+const xr = vars.xr;
+const xrHelper = xr.baseExperience;
 
 const raycaster = new BABYLON.Ray(new BABYLON.Vector3(), new BABYLON.Vector3());
 raycaster.length = 1000;
@@ -457,6 +481,23 @@ canvas.addEventListener("mouseup", e => {
     CURRENT_ORE = [];
 });
 
+addEventListener("beforeunload", () => {
+    localStorage.setItem("tdd-lastPlayed", Date.now());
+    if (!vars.hasPlayed && STARTED) {
+        localStorage.setItem("tdd-changedMyMind", "true"); // secret achievement for opening the game and then leaving without doing anything
+    }
+
+    stats.totalPlaytime += (performance.now() - vars.sessionStart) / 1000;
+
+    stats.update();
+
+    let unlockedAchievements = [];
+    for (let i = 0; i < achievementArray.length; i++) {
+        if (achievementArray[i].unlocked) unlockedAchievements.push(achievementArray[i].id);
+    }
+    localStorage.setItem("tdd-unlockedAchievements", JSON.stringify(unlockedAchievements));
+});
+
 const workers = {};
 workers.findEmpty = new Worker("js/workers/find-empty.js", {type: "module"});
 workers.findEmpty.addEventListener("message", e => {
@@ -509,6 +550,11 @@ skybox.ignoreCameraMaxZ = true;
 
 const lightContainers = {};
 
+/**
+ * Creates a new clustered light container.
+ * @param {string} key Key of the container
+ * @returns {BABYLON.ClusteredLightContainer}
+ */
 function createLightContainer(key) {
     key = "0";
     if (lightContainers[key]) return lightContainers[key];
@@ -1027,7 +1073,7 @@ export async function generateOre(x, y, z, ore, bg, settings) {
             name: `light0-${x}-${y}-${z}`
         };
         lightArr.push(light);
-        const pointLight = new BABYLON.PointLight(light.name, light.position, scene);
+        const pointLight = new BABYLON.PointLight(light.name, light.position, scene, true);
         pointLight.diffuse = light.color;
         pointLight.intensity = light.intensity;
         pointLight.range = light.distance + 1;
@@ -1377,12 +1423,28 @@ function spawnOre(x, y, z, settings) {
         return map.at(x, y, z);
     }
     settings.chance = oreData.chance;
+
+    const veinRnd = rand01(x, y, z, vars.seed + Math.SQRTPI);
+    const geodeRnd = rand01(x, y, z, vars.seed + Math.SQRTPI * 2);
+    if (!settings.noVein && !ores[oreData.ore]?.noVein && !ores[oreData.ore]?.forcedBG && veinRnd < VEIN_CHANCE && oreData.chance !== Infinity || ores[oreData.ore]?.guaranteedVein) {
+        const num = veinRnd / VEIN_CHANCE;
+        settings.num = num;
+        const oreCount = Math.max(Math.round(1 / 1.5 / num * Math.tan(Math.PI / 2 * (1 - (1 - num) ** (Math.log10(100 * (1.004 - num)) / 2 + 1) + 1.9997878)) + 120.721 ** (245000 * (num - 0.99999))), 3); // 3~128000
+        generateVein(x, y, z, oreData.ore, oreCount, ores[oreData.ore]?.guaranteedVein, settings.chance, oreData.conditionLabel, settings);
+        settings.isVein = true;
+    } else if (!settings.noGeode && geodeRnd < GEODE_CHANCE && oreData.chance !== Infinity && !ores[oreData.ore]?.noGeode && !ores[oreData.ore]?.forcedBG || ores[oreData.ore]?.guaranteedGeode) {
+        const num = geodeRnd / GEODE_CHANCE;
+        settings.num = num;
+        let radius = Math.floor(Math.tan((Math.PI * (num - 0.05) ** Math.max((num + 0.6) ** 3.6 - 1, 4)) / 2) + 3 - Math.log(1 - num) / Math.log(4)); // 3~12
+        if (isNaN(radius) || radius < 3) radius = 3;
+        generateGeode(x, y, z, radius, oreData.ore, settings.chance, ores[oreData.ore]?.guaranteedGeode, oreData.conditionLabel, settings);
+    }
     
     generateOre(x, y, z, oreData.ore, oreData.bg, settings);
     
     if (ores[oreData.ore]?.tree) {
-        let h = ores[oreData.ore].tree.height || { min: 4, max: 4 };
-        if (typeof h === "number") h = { min: h, max: h };
+        let h = ores[oreData.ore].tree.height || {min: 4, max: 4};
+        if (typeof h === "number") h = {min: h, max: h};
         const height = Math.floor(Math.random() * (h.max - h.min + 1)) + h.min;
         const settings2 = {...settings};
         if (ores[oreData.ore].tree.allowTransparent) settings2.allowTransparent = true;
@@ -1431,6 +1493,101 @@ workers.findEmpty.addEventListener("message", e => {
     }
     generatedChunks = generatedChunks.difference(priorityChunksToAdd);
 });
+
+function generateVein(x, y, z, ore, count, isGuaranteed, chance, conditionLabel, settings = {}) {
+    let num = settings.num;
+    let positions = [];
+    if (typeof ore !== "string" || !ores[ore]) return;
+    x = Math.round(x);
+    y = Math.round(y);
+    z = Math.round(z);
+    let count2 = 0;
+    let r = Math.floor(Math.cbrt(count) + 1);
+
+    const candidates = [];
+    for (let x1 = x - r; x1 <= x + r; x1++) {
+        for (let y1 = y - r; y1 <= y + r; y1++) {
+            for (let z1 = z - r; z1 <= z + r; z1++) {
+                if (x1 === x && y1 === y && z1 === z) continue;
+                if (Math.sqrt((x1 - x) ** 2 + (y1 - y) ** 2 + (z1 - z) ** 2) < r && Math.random() < 0.75) {
+                    candidates.push({x: x1, y: y1, z: z1});
+                }
+            }
+        }
+    }
+
+    // Shuffle candidates
+    for (let i = candidates.length - 1; i > 0; i--) {
+        const j = Math.floor(Math.random() * (i + 1));
+        [candidates[i], candidates[j]] = [candidates[j], candidates[i]];
+    }
+    for (let i = 0; i < candidates.length; i++) {
+        const pos = candidates[i];
+        if (count2 >= count) break;
+        const oreData = generateOre(pos.x, pos.y, pos.z, ore, getBGOre(pos.x, pos.y, pos.z) ?? "shale", {isVein: true, veinCount: count + 1, noUpdate: true, chance, conditionLabel});
+        if (oreData && oreData.ore === ore) {
+            positions.push(pos);
+            count2++;
+        }
+    }
+    let end = "";
+    if (num) {
+        const chance1 = (1 - num) * settings.originalChance * (isGuaranteed ? 1 : VEIN_CHANCE);
+        const chance2 = (1 - num) * chance * (isGuaranteed ? 1 : VEIN_CHANCE);
+
+        if (1 / chance2 > stats.lowestRNG) {
+            stats.lowestRNG = 1 / chance2;
+        }
+    }
+    if (ores[ore].textureHasTransparency && !ores[ore].allowTransparent || ores[ore].forceAdjacent) {
+        for (let i = 0; i < positions.length; i++) {
+            const pos = positions[i];
+            generateAdjacent(pos.x, pos.y, pos.z, {noUpdate: true});
+        }
+    }
+
+    if (count2 + 1 > stats.largestVein) {
+        stats.largestVein = count2 + 1;
+    }
+}
+
+function generateGeode(x, y, z, radius = 4, ore, chance1, isGuaranteed, conditionLabel, settings = {}) {
+    let num = settings.num;
+    if (typeof ore !== "string" || !ores[ore]) return;
+    const outerGeode = layers[getLayer(y, x, z, false)]?.geode ?? "chalcedony";
+    x = Math.round(x);
+    y = Math.round(y);
+    z = Math.round(z);
+    // only generate on the outermost layer
+    for (let x1 = x - radius; x1 < x + radius; x1++) {
+        for (let y1 = y - radius; y1 < y + radius; y1++) {
+            if (y1 === ores.barrier.maxY) continue;
+            for (let z1 = z - radius; z1 < z + radius; z1++) {
+                if (Math.sqrt((x1 - x) ** 2 + (y1 - y) ** 2 + (z1 - z) ** 2) < radius) {
+                    if (Math.sqrt((x1 - x) ** 2 + (y1 - y) ** 2 + (z1 - z) ** 2) < radius - 1) {
+                        if (Math.sqrt((x1 - x) ** 2 + (y1 - y) ** 2 + (z1 - z) ** 2) >= radius - 2) {
+                            generateOre(x1, y1, z1, ore, null, {isGeode: true, chance: chance1, conditionLabel});
+                        } else {
+                            if (!map.at(x1, y1, z1)) map.at(x1, y1, z1, true);
+                        }
+                    } else {
+                        generateOre(x1, y1, z1, outerGeode, outerGeode);
+                    }
+                }
+            }
+        }
+    }
+
+    const chance = settings.originalChance * (1 - num) * (isGuaranteed ? 1 : GEODE_CHANCE);
+    const chance2 = chance1 * (1 - num) * (isGuaranteed ? 1 : GEODE_CHANCE);
+
+    if (1 / chance2 > stats.lowestRNG) {
+        stats.lowestRNG = 1 / chance2;
+    }
+    if (radius > stats.largestGeode) {
+        stats.largestGeode = radius;
+    }
+}
 
 function generateTree(x, y, z, trunk, leaves, height = 4, leafSize = 2, settings = {}) {
     settings.isTree = true;
@@ -1928,29 +2085,6 @@ function mine(x, y, z, settings = {}) {
         inventory.addItem(ore, dropCount);
     }
     const chance = map.at(x, y, z).chance || calculateRarity(ores[ore], y, x, z);
-    const displayName = `${map.at(x, y, z).prefix ? map.at(x, y, z).prefix + " " : ""}${map.at(x, y, z).name || ores[ore].name}`;
-    if (!map.at(x, y, z).placed && (chance <= 1e-6 || tiers[ores[ore].tier].maxChance <= 1e-6 || (tiers[ores[ore].tier].global && !ores[ore].noGlobal)) && chance !== 0 && !map.at(x, y, z).isVein && !map.at(x, y, z).isGeode) {
-        let footerText = "";
-        if (map.at(x, y, z).traits) {
-            const originalChance = chance / map.at(x, y, z).traits.reduce((acc, trait) => acc * (traits[trait].chance || 1), 1);
-            footerText += `${formatChance(originalChance)} chance for the ore to spawn`;
-            for (let i = 0; i < map.at(x, y, z).traits.length; i++) {
-                const trait = map.at(x, y, z).traits[i];
-                footerText += `\n${formatChance(traits[trait].chance)} chance to be ${traits[trait].appendName ? "a " : ""}${traits[trait].name.toLowerCase()}`;
-            }
-        }
-        
-        if (ores[ore].caveExclusive) {
-            if (ores[ore].caveExclusive === -1) footerText += `\nNever spawns in caves`;
-            else footerText += `\nOnly spawns in caves`;
-        }
-        if (map.at(x, y, z).conditionLabel) footerText += `\n${map.at(x, y, z).conditionLabel}`;
-        footerText = footerText.trim();
-        let footer;
-        if (footerText) footer = {text: footerText};
-        
-        // webhookMessage(`${username} has found ${displayName}!`, `**Tier:** ${tiers[ores[ore].tier].name}`, ore, chance, y, footer);
-    }
     
     if (!map.at(x, y, z).placed) {
         stats.totalOresMined++;
@@ -2136,6 +2270,7 @@ for (let i = 0; i < oreArray.length; i++) {
 }
 
 function start() {
+    vars.sessionStart = performance.now();
     locations[0][1] = topLayer(locations[0][0], locations[0][2]) + 1;
 
     if (new URLSearchParams(location.search).has("spawn")) {
@@ -2187,6 +2322,11 @@ function pickPredicate(mesh) {
 // tick function
 function tick() {
     requestAnimationFrame(tick);
+
+    if (performance.now() - vars.startIdleTime > 300000) { // 5 minutes
+        vars.startActiveTime = performance.now(); // reset active time
+    }
+    
     if (vars.PAUSED) return;
     FRAME_TIME = Math.min((performance.now() - LAST_FRAME) / 1000, 0.1); // cap frame time to prevent huge lag spikes
     LAST_FRAME = performance.now();
@@ -2811,7 +2951,11 @@ function tick() {
     }
     
     // hp + radiation
-    if (performance.now() - player.lastRealHit > player.regenCooldown) player.health += FRAME_TIME * 3; // health regeneration
+    let canRegen = false;
+    if (performance.now() - player.lastRealHit > player.regenCooldown) {
+        canRegen = true;
+        player.health += FRAME_TIME * 3; // health regeneration
+    }
     let netChange = player.radiation + 0;
     player.radiation *= 0.95 ** FRAME_TIME; // decay radiation over time
     player.radiation -= 0.3 * FRAME_TIME; // slight radiation loss over time
@@ -2840,7 +2984,7 @@ function tick() {
     if (player.radiation > 12.5) {
         player.damage(((player.radiation) * 0.08 - 1) * FRAME_TIME, 0, "radiation", true, false, false);
     } else if (player.radiation > 0) {
-        player.health -= (player.radiation) * 0.24 * FRAME_TIME;
+        if (canRegen) player.health -= (player.radiation) * 0.24 * FRAME_TIME;
     } else player.radiation = 0;
     
     if (player.health > 100) player.health = 100;
@@ -2855,11 +2999,24 @@ function tick() {
     }
     
     updateTopLeft();
+}
+
+tick();
+
+engine.runRenderLoop(() => {
+    if (vrEnabled && xrHelper.state === BABYLON.WebXRState.IN_XR) {
+        xrHelper.camera.position.x = player.position.x;
+        xrHelper.camera.position.y = player.position.y;
+        xrHelper.camera.position.z = player.position.z;
+
+        // console.log(xrHelper.sessionManager?.viewerReferenceSpace?.getOffsetReferenceSpace(new XRRigidTransform({x: 0, y: 0, z: 0})));
+        // xrHelper.camera.position.y += xrHelper.camera.realWorldHeight - 1;
+    }
     
     scene.clearColor = scene.fogColor;
     scene.fogColor = scene.clearColor;
     scene.render();
-}
+});
 
 vars.setFogColor = (color, night) => {
     vars.fogColor = getColor(color);
@@ -2868,5 +3025,3 @@ vars.setFogColor = (color, night) => {
 
 textures["skybox/space"] = new BABYLON.Texture("img/block/skybox/space.png", scene);
 textures["skybox/space"].coordinatesMode = BABYLON.Texture.SKYBOX_MODE;
-
-tick();

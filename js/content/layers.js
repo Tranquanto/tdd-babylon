@@ -815,7 +815,7 @@ const biomes = {
         minY: -7000,
         size: 200,
         requirement(x, y, z) {
-            return getBiomeNumber(x, y, z, "moss") >= 0.2914; // ~15% chance
+            return getBiomeNumber(x, y, z, "mossCave") >= 0.2914; // ~15% chance
         },
         cosmetic: true
     },
@@ -825,7 +825,7 @@ const biomes = {
         minY: -10000,
         size: 200,
         requirement(x, y, z) {
-            return getBiomeNumber(x, y, z, "moss") >= 0.5318; // genuinely ~2% chance :sob:
+            return getBiomeNumber(x, y, z, "enchantedCave") >= 0.5318; // genuinely ~2% chance :sob:
         },
         cosmetic: true
     }

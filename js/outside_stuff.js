@@ -101,6 +101,8 @@ export function displayAlert(msg, color = "#fff", time = 10000, borderColor = "#
         });
     });
 }
+vars.displayAlert = displayAlert;
+
 export function getOres(x, y, z, settings) {
     const layer = getLayer(y, x, z, false);
     vars.getOreSettings = settings;
@@ -188,7 +190,7 @@ export function getOres(x, y, z, settings) {
         if (oreMap[candidate.ore]) {
             oreMap[candidate.ore].chance += candidate.chance;
         } else {
-            oreMap[candidate.ore] = { chance: candidate.chance, forced: candidate.forced || false, priority: candidate.priority || 0 };
+            oreMap[candidate.ore] = {chance: candidate.chance, forced: candidate.forced ?? false, priority: candidate.priority ?? 0};
         }
     }
     for (const ore in oreMap) {
@@ -214,12 +216,12 @@ export function getOre(x, y, z, settings) {
     if (settings === undefined) settings = {caveExclusive: false, all: true};
     settings = {...settings};
     if (layers[getLayer(y, x, z)]?.universalCondition) {
-        if (!layers[getLayer(y, x, z)].universalCondition(x, y, z, settings || {})) {
-            return {ore: null, bg: null};
+        if (!layers[getLayer(y, x, z)].universalCondition(x, y, z, settings || {}) && !settings.ignoreUniversal) {
+            return settings.onlyBG ? null : {ore: null, bg: null};
         }
     }
-    const potentials = getOres(x, y, z, settings || { caveExclusive: false });
-    if (potentials.length === 0) return { ore: null, bg: null };
+    const potentials = getOres(x, y, z, settings || {caveExclusive: false});
+    if (potentials.length === 0) return {ore: null, bg: null};
     let ore;
     let bgs = potentials.filter(g => g.chance === Infinity);
     let maxPriority = -Infinity;
@@ -306,16 +308,16 @@ export function getOre(x, y, z, settings) {
         // if (!bg) console.log("No ore found at", x, y, z, "with settings", settings, "potentials:", potentials, "bg:", bg);
         ore = bg;
     }
-    if (ore !== null && bg === null) bg = { ore: "shale", chance: Infinity };
-    return { ore: ore ? ore.ore : null, bg: bg ? bg.ore : null, x, y, z, chance: ore ? ore.chance : 0, conditionLabel: getInterval(ore ? ore.ore : null, y).conditionLabel };
+    if (ore !== null && bg === null) bg = {ore: "shale", chance: Infinity};
+    return {ore: ore ? ore.ore : null, bg: bg ? bg.ore : null, x, y, z, chance: ore ? ore.chance : 0, conditionLabel: getInterval(ore ? ore.ore : null, y).conditionLabel};
 }
 
 export function getBGOre(x, y, z) {
-    const bg = getOre(x, y, z, {onlyBG: true});
-    return bg ? bg : null;
+    const bg = getOre(x, y, z, {onlyBG: true, ignoreUniversal: true});
+    return bg ?? null;
 }
 
-export function calculateChance(y, interval, x, z, disregardCondition, adjusted, settings) {
+export function calculateChance(y, interval, x, z, disregardCondition, adjusted, settings = {}) {
     const chance = adjusted ? interval.adjustedChance : interval.chance;
     const isObject = typeof chance === "object";
     if (chance === undefined || chance === null) return undefined;
@@ -353,7 +355,7 @@ export function calculateChance(y, interval, x, z, disregardCondition, adjusted,
     }
 
     if (1 - (1 - (minc + dc * progress)) <= vars.RARE_ORE_CHANCE_MULTIPLIER_CUTOFF) i *= vars.RARE_ORE_CHANCE_MULTIPLIER;
-    if (layers[getLayer(y, x, z, false)]?.universalCondition && !disregardCondition) {
+    if (layers[getLayer(y, x, z, false)]?.universalCondition && !disregardCondition && !settings.ignoreUniversal) {
         i *= Number(layers[getLayer(y, x, z, false)].universalCondition(x, y, z, settings || {}));
     }
 

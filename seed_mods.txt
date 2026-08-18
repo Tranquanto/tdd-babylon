@@ -1,0 +1,32 @@
+ --------------------------------------------------------------------------------------------------------------------
+|                  This file lists the numbers added to the seed in order for specific generations.                  |
+| This is solely to ensure that the same seed is not used for two different spawns (such as a structure and an ore). |
+|                              Irrational numbers are used to prevent overlapping seeds.                             |
+ --------------------------------------------------------------------------------------------------------------------
+
+Default seed                       | seed
+
+Temperature                        | seed + Math.LN10
+Humidity                           | seed + Math.LN10 * 2
+Biome Seed Modifiers               | seed + index / (7.8 + Math.E)
+
+Heightmap                          | seed + Math.sqrt(Math.E)
+Large Heightmap                    | seed + Math.sqrt(Math.E) * 2
+Mountain Heightmap                 | seed + Math.sqrt(Math.E) * 3
+Large Mountain Heightmap           | seed + Math.sqrt(Math.E) * 4
+
+Normal Caves                       | seed + Math.E
+Small Caves                        | seed + Math.E * 2
+Dripstone                          | seed + Math.E * 3
+Dripstone End                      | seed + Math.E * 4
+
+Ores                               | seed + Math.cbrt(3) (+ Math.SQRT1_2)
+Crystals                           | above + 0.1
+Structures                         | seed (+ Math.E * Math.PI for offset)
+
+Veins                              | seed + Math.sqrt(Math.PI)
+Geodes                             | seed + Math.sqrt(Math.PI) * 2
+
+Deep Space                         | seed + Math.PI * 2
+Intertemperate                     | seed + Math.sqrt(11, 13) (noise, and x/y/z offset respectively)
+Basement                           | seed + Math.sqrt(2, 3, 5, 7) (all used for x, y, z, and perlin noise respectively)

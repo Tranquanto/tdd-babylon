@@ -1,5 +1,5 @@
 import vars from "./vars.js";
-import { getOre, map, oreAt, checkAdjacent, calculatePower, airAt, calculateRarity, chunks, getBGOre, breakMap, k } from "./outside_stuff.js";
+import { getOre, map, k, oreAt, airAt, checkAdjacent, calculatePower, calculateRarity, chunks, getBGOre, breakMap, saveMap, interacted, setInteracted } from "./outside_stuff.js";
 import { getLayer, items, layers, locations, oreArray, ores, structureArray, structures, tiers, traits, sfxOptions, achievementArray } from "./content/items.js";
 import { biomes, getBiomeNumber, getHumidity, getTemperature, topLayer } from "./content/layers.js";
 import { isCave, CHUNK3_RATE, CHUNK_SIZE_3, CHUNK_SIZE, noise, isCaveFloor, isCaveCeiling } from "./noise.js";
@@ -7,6 +7,7 @@ import { inventory, toggleInventory, unlockAchievement } from "./inventory.js";
 import { rand01 } from "./perlin.js";
 import { getColor } from "./getColor.js";
 import { oreParticles } from "./content/oreParticles.js";
+import { VoxelMap } from "./VoxelMap.js";
 
 const { player, stats, camera } = vars;
 
@@ -30,6 +31,7 @@ let lightArr = [], radArr = [], repairArr = [], repairObj = {}, lightKeys = {};
 let USE_THIN_INSTANCES = true;
 let totalOres = 0;
 let GUI_HIDDEN = false;
+let savesDisabled = false;
 
 let particleSystemID = 0, veinID = 0, geodeID = 0;
 
@@ -500,6 +502,8 @@ addEventListener("beforeunload", () => {
         if (achievementArray[i].unlocked) unlockedAchievements.push(achievementArray[i].id);
     }
     localStorage.setItem("tdd-unlockedAchievements", JSON.stringify(unlockedAchievements));
+
+    if (!savesDisabled) localStorage.setItem(`tdd-saveMap-${vars.seed}`, JSON.stringify({save: interacted._obj, seed: vars.seed, position: {x: player.position.x, y: player.position.y, z: player.position.z}, rotation: perspectiveCamera.rotation}));
 });
 
 const workers = {};
@@ -641,7 +645,7 @@ const checkCollision = (pos, returnOre, includeNoCollision) => {
     return false;
 };
 
-export function teleport(x, y, z) {
+export function teleport(x, y, z, rotX, rotY) {
     if (!player.velocity.set) player.velocity = new BABYLON.Vector3(0, 0, 0);
     else player.velocity.set(0, 0, 0);
 
@@ -660,6 +664,9 @@ export function teleport(x, y, z) {
     updateTopLeft();
     generateAdjacent(x, y, z);
     generateAdjacent(x, y + 1, z);
+
+    perspectiveCamera.rotation.x = rotX ?? 0;
+    perspectiveCamera.rotation.y = rotY ?? 0;
 }
 
 player.teleport = teleport;
@@ -815,7 +822,7 @@ export async function generateOre(x, y, z, ore, bg, settings) {
             const result = await BABYLON.ImportMeshAsync(`models/${settings.customModel}.glb`, scene);
             oreMesh = result.meshes[1];
             oreMesh.id = oreMesh.name = `${meshID}_${count}`;
-            const oreMaterial = new BABYLON.PBRMaterial(`customModelMaterial-${x}_${y}_${z}`, scene);
+            const oreMaterial = new BABYLON.PBRMaterial(`customModelMaterial-${k(x, y, z)}`, scene);
 
             if (ores[ore].colorize === undefined) oreMaterial.albedoColor = color;
             oreMaterial.roughness = 1;
@@ -848,7 +855,7 @@ export async function generateOre(x, y, z, ore, bg, settings) {
             oreMesh = BABYLON.MeshBuilder.CreateBox(`${meshID}_${count}`, {size: 1, wrap: true}, scene);
             oreMesh.alphaIndex = 99;
             
-            const oreMaterial = new BABYLON.PBRMaterial(`oreMaterial-${x}_${y}_${z}`, scene);
+            const oreMaterial = new BABYLON.PBRMaterial(`oreMaterial-${k(x, y, z)}`, scene);
             oreMaterial.albedoColor = oreMaterial.diffuseColor = new BABYLON.Color3(1, 1, 1);
             oreMaterial.ambientColor = new BABYLON.Color3(1, 1, 1);
             oreMaterial.specularColor = new BABYLON.Color3(0, 0, 0);
@@ -860,7 +867,7 @@ export async function generateOre(x, y, z, ore, bg, settings) {
             let materials = [];
             if (ores[ore]?.multipleTextures) {
                 for (let i = 0; i < 6; i++) {
-                    const mat = new BABYLON.PBRMaterial(`oreMaterial-${x}_${y}_${z}-${i}`, scene);
+                    const mat = new BABYLON.PBRMaterial(`oreMaterial-${k(x, y, z)}-${i}`, scene);
                     mat.albedoColor = mat.diffuseColor = new BABYLON.Color3(1, 1, 1);
                     mat.ambientColor = new BABYLON.Color3(1, 1, 1);
                     mat.specularColor = new BABYLON.Color3(0, 0, 0);
@@ -876,7 +883,7 @@ export async function generateOre(x, y, z, ore, bg, settings) {
                 materials.push(oreMaterial);
             }
             
-            const backgroundMaterial = new BABYLON.PBRMaterial(`backgroundMaterial-${x}_${y}_${z}`, scene);
+            const backgroundMaterial = new BABYLON.PBRMaterial(`backgroundMaterial-${k(x, y, z)}`, scene);
             backgroundMaterial.albedoColor = backgroundMaterial.diffuseColor = settings.bgColor ? color : new BABYLON.Color3(1, 1, 1);
             backgroundMaterial.ambientColor = new BABYLON.Color3(1, 1, 1);
             backgroundMaterial.specularColor = new BABYLON.Color3(0, 0, 0);
@@ -884,7 +891,7 @@ export async function generateOre(x, y, z, ore, bg, settings) {
             const bgMaterials = [];
             if (ores[bg]?.multipleTextures) {
                 for (let i = 0; i < 6; i++) {
-                    const mat = new BABYLON.PBRMaterial(`backgroundMaterial-${x}_${y}_${z}-${i}`, scene);
+                    const mat = new BABYLON.PBRMaterial(`backgroundMaterial-${k(x, y, z)}-${i}`, scene);
                     mat.albedoColor = mat.diffuseColor = new BABYLON.Color3(1, 1, 1);
                     mat.ambientColor = new BABYLON.Color3(1, 1, 1);
                     mat.specularColor = new BABYLON.Color3(0, 0, 0);
@@ -979,7 +986,7 @@ export async function generateOre(x, y, z, ore, bg, settings) {
             oreMaterial.usePhysicalLightFalloff = false;
             backgroundMaterial.usePhysicalLightFalloff = false;
             
-            const multiMaterial = new BABYLON.MultiMaterial(`multi-${x}_${y}_${z}`, scene);
+            const multiMaterial = new BABYLON.MultiMaterial(`multi-${k(x, y, z)}`, scene);
             multiMaterial.subMaterials.push(...bgMaterials, ...materials);
             oreMesh.material = multiMaterial;
             
@@ -1085,7 +1092,7 @@ export async function generateOre(x, y, z, ore, bg, settings) {
             intensity: ores[ore].light.str,
             distance: ores[ore].light.radius || ores[ore].light.str * 2,
             decay: typeof ores[ore].light.decay === "number" ? ores[ore].light.decay : 2,
-            name: `light0-${x}-${y}-${z}`
+            name: `light0-${k(x, y, z)}`
         };
         lightArr.push(light);
         const pointLight = new BABYLON.PointLight(light.name, light.position, scene, true);
@@ -1093,7 +1100,7 @@ export async function generateOre(x, y, z, ore, bg, settings) {
         pointLight.intensity = light.intensity;
         pointLight.range = light.distance + 1;
         pointLight.id = light.name;
-        lightKeys[`${x}_${y}_${z}`] = pointLight;
+        lightKeys[`${k(x, y, z)}`] = pointLight;
         
         const container = createLightContainer(getChunkKey(x, y, z, 64), 64);
         
@@ -1103,12 +1110,12 @@ export async function generateOre(x, y, z, ore, bg, settings) {
     }
 
     if (ores[ore].audio) {
-        const audioNode = new BABYLON.TransformNode(`audioNode0-${x}_${y}_${z}`, scene);
+        const audioNode = new BABYLON.TransformNode(`audioNode0-${k(x, y, z)}`, scene);
         audioNode.position.copyFrom(posWithOffset);
         audioNode.rotate(BABYLON.Vector3.Up(), Math.PI);
         
         new BABYLON.CreateAudioEngineAsync({disableDefaultUI: true}).then(audioEngine => {
-            BABYLON.CreateSoundAsync(`audio0-${x}_${y}_${z}`, `audio/ore/${ores[ore].audio}`, {spatialEnabled: true}).then(sound => {
+            BABYLON.CreateSoundAsync(`audio0-${k(x, y, z)}`, `audio/ore/${ores[ore].audio}`, {spatialEnabled: true}).then(sound => {
                 audioEngine.unlockAsync().then(() => {
                     sound.loop = true;
                     sound.spatial.minDistance = 1;
@@ -1118,41 +1125,15 @@ export async function generateOre(x, y, z, ore, bg, settings) {
                     sound.spatial.panningModel = "HRTF";
                     sound.play();
                     
-                    audios.push({audioEngine, sound});
+                    audios.push({audioEngine, sound, x, y, z, ore});
                 });
             });
         });
     }
 
-    /* if (ores[ore].particles) {
-        const config = ores[ore].particles;
-        const ps = new BABYLON.ParticleSystem(`particles-${x}_${y}_${z}`, config.count || 100, scene);
-        ps.renderingGroupId = 1;
-        ps.blendMode = BABYLON.ParticleSystem.BLENDMODE_STANDARD;
-
-        ps.emitter = posWithOffset.clone();
-        ps.createSphereEmitter(0.5);
-        ps.particleTexture = getTexture(config.texture, "src", undefined, true);
-        ps.emitRate = config.emitRate || 10;
-        ps.minLifeTime = ps.maxLifeTime = config.lifetime || 1.5;
-        ps.color1 = ps.color2 = getColor(config.color ?? "#ffffff");
-        ps.colorDead = getColor(config.endColor ?? ps.color1);
-        ps.gravity = new BABYLON.Vector3(config.gravity?.x ?? 0, config.gravity?.y ?? 0, config.gravity?.z ?? 0);
-
-        // particleLifetime: ores[ore].particles.lifetime || 1.5,
-        // particleSize: ores[ore].particles.size || 0.1,
-        // area: ores[ore].particles.area || { x: 1, y: 1 },
-        // gravity: ores[ore].particles.gravity,
-        // color: ores[ore].particles.color || new THREE.Color(0xffffff),
-        // centerGravity: ores[ore].particles.centerGravity || 0,
-        // velocity: ores[ore].particles.velocity || { x: 0, y: 0, z: 0 }
-
-        ps.start();
-    } */
-
     if (oreParticles[ore]) {
         /** @type {BABYLON.ParticleSystem} */
-        const ps = oreParticles[ore].getParticleSystem(`particles-${x}_${y}_${z}_${particleSystemID++}`, scene).clone();
+        const ps = oreParticles[ore].getParticleSystem(`particles-${k(x, y, z)}_${particleSystemID++}`, scene).clone();
         ps.renderingGroupId = 1;
         ps.blendMode ||= BABYLON.ParticleSystem.BLENDMODE_STANDARD;
         ps.emitter = posWithOffset.clone();
@@ -1162,6 +1143,10 @@ export async function generateOre(x, y, z, ore, bg, settings) {
     }
     
     if (ores[ore].onGenerate) ores[ore].onGenerate(x, y, z, settings, map.at(x, y, z));
+
+    if (settings.placed) {
+        setInteracted(x, y, z);
+    }
     
     return map.at(x, y, z);
 }
@@ -1227,23 +1212,23 @@ function removeOre(x, y, z, settings = {}) {
                     }
                     
                     // remove any audio and light associated with this ore
-                    const light = lightArr.find(l => l.name === `light0-${x}-${y}-${z}`);
+                    const light = lightArr.find(l => l.name === `light0-${k(x, y, z)}`);
                     if (light !== undefined) {
                         const idx = lightArr.indexOf(light);
                         if (idx !== -1) lightArr.splice(idx, 1);
                         /** @type {BABYLON.ClusteredLightContainer} */
                         const container = lightContainers["0"];
-                        const pointLight = lightKeys[`${x}_${y}_${z}`];
+                        const pointLight = lightKeys[`${k(x, y, z)}`];
                         if (pointLight !== undefined) {
                             pointLight.intensity = 0;
                             scene.removeLight(pointLight);
-                            delete lightKeys[`${x}_${y}_${z}`];
+                            delete lightKeys[`${k(x, y, z)}`];
                         } else {
-                            console.warn(`Light for ${x}_${y}_${z} not found in lightKeys.`);
+                            console.warn(`Light for ${k(x, y, z)} not found in lightKeys.`);
                         }
                     }
 
-                    const audioIdx = audios.findIndex(l => l.sound.name === `audio0-${x}_${y}_${z}`);
+                    const audioIdx = audios.findIndex(l => l.sound.name === `audio0-${k(x, y, z)}`);
                     if (audioIdx !== -1) {
                         const audio = audios[audioIdx];
                         audio.audioEngine.dispose();
@@ -1255,15 +1240,15 @@ function removeOre(x, y, z, settings = {}) {
                     }
                     
                     // remove radiation
-                    const radIndex = radArr.findIndex(r => r.name === `rad-${x}-${y}-${z}`);
+                    const radIndex = radArr.findIndex(r => r.name === `rad-${k(x, y, z)}`);
                     if (radIndex !== -1) {
                         radArr.splice(radIndex, 1);
                     }
                     
                     // remove from repair list
-                    if (repairObj[`${x}_${y}_${z}`]) {
-                        delete repairObj[`${x}_${y}_${z}`];
-                        repairArr.splice(repairArr.indexOf(`${x}_${y}_${z}`), 1);
+                    if (repairObj[`${k(x, y, z)}`]) {
+                        delete repairObj[`${k(x, y, z)}`];
+                        repairArr.splice(repairArr.indexOf(`${k(x, y, z)}`), 1);
                     }
                     
                     // remove tick
@@ -1298,7 +1283,7 @@ function removeOre(x, y, z, settings = {}) {
         }
         if (!settings.keep) {
             const chunk = getChunk(x, y, z);
-            const index = chunk.indexOf(`${x}_${y}_${z}`);
+            const index = chunk.indexOf(`${k(x, y, z)}`);
             if (index !== -1) {
                 chunk.splice(index, 1);
             }
@@ -1334,8 +1319,8 @@ function getChunk(x, y, z) {
     x = Math.floor(x / CHUNK_SIZE);
     y = Math.floor(y / CHUNK_SIZE);
     z = Math.floor(z / CHUNK_SIZE);
-    if (!chunks[`${x}_${y}_${z}`]) chunks[`${x}_${y}_${z}`] = [];
-    return chunks[`${x}_${y}_${z}`];
+    if (!chunks[`${k(x, y, z)}`]) chunks[`${k(x, y, z)}`] = [];
+    return chunks[`${k(x, y, z)}`];
 }
 
 function getChunkKey(x, y, z, size, split) {
@@ -1365,6 +1350,7 @@ function spawnOre(x, y, z, settings) {
     settings.all = true;
     settings.cave = {};
     settings.scale = {};
+    let progress;
     
     for (let i = 0; i < structureArray.length; i++) {
         const structure = structureArray[i];
@@ -1464,8 +1450,22 @@ function spawnOre(x, y, z, settings) {
         }
     }
     
-    if (!oreData?.ore) {
-        oreData = getOre(x, y, z, settings);
+    if (saveMap.at(x, y, z)) {
+        const block = saveMap.at(x, y, z);
+        oreData = {ore: block.ore, bg: block.background, chance: block.chance};
+        settings.offset = block.offset;
+        settings.rotation = block.rotation;
+        settings.scale = block.scale;
+        progress = block.progress;
+
+        if (saveMap.at(x, y, z).ore === "air") {
+            map.at(x, y, z, true);
+            return map.at(x, y, z);
+        }
+    } else {
+        if (!oreData?.ore) {
+            oreData = getOre(x, y, z, settings);
+        }
     }
     if (!oreData || oreData.ore === null) {
         map.at(x, y, z, true);
@@ -1490,6 +1490,10 @@ function spawnOre(x, y, z, settings) {
     }
     
     generateOre(x, y, z, oreData.ore, oreData.bg, settings);
+
+    if (progress !== undefined) {
+        setProgress(x, y, z, undefined, progress);
+    }
     
     if (ores[oreData.ore]?.tree) {
         let h = ores[oreData.ore].tree.height || {min: 4, max: 4};
@@ -1842,20 +1846,25 @@ function generateChunk3(x, y, z, noCave = false) { // used for places like space
         for (let y1 = y * CHUNK_SIZE_3; y1 < (y + 1) * CHUNK_SIZE_3; y1++) {
             for (let z1 = z * CHUNK_SIZE_3; z1 < (z + 1) * CHUNK_SIZE_3; z1++) {
                 const sets1 = {...sets};
-                if (map.at(x1, y1, z1) && !map.at(x1, y1, z1).temp) continue;
+                const fromSave = checkAdjacent(x1, y1, z1, (x, y, z) => saveMap.at(x, y, z), true);
                 const isCaveAir = checkAdjacent(x1, y1, z1, isCave);
                 let caveData;
-                if (layers[getLayer(y1, x1, z1, false)].chunks !== "3d"
-                    && layers[getLayer(y1 - 1, x1, z1, false)].chunks !== "3d"
-                    && layers[getLayer(y1 + 1, x1, z1, false)].chunks !== "3d"
-                    && !isCaveAir
-                ) continue;
-                if (isCaveAir) {
-                    caveData = map.at(...isCaveAir);
-                    sets1.caveType = caveData.caveType;
-                    sets1.hasCrates = caveData.hasCrates;
-                    sets1.hasTorches = caveData.hasTorches;
-                    sets1.hasCrystals = caveData.hasCrystals;
+
+                if (!fromSave) {
+                    if (
+                        map.at(x1, y1, z1) && !map.at(x1, y1, z1).temp
+                        || layers[getLayer(y1, x1, z1, false)].chunks !== "3d"
+                        && layers[getLayer(y1 - 1, x1, z1, false)].chunks !== "3d"
+                        && layers[getLayer(y1 + 1, x1, z1, false)].chunks !== "3d"
+                        && !isCaveAir
+                    ) continue;
+                    if (isCaveAir) {
+                        caveData = map.at(...isCaveAir);
+                        sets1.caveType = caveData.caveType;
+                        sets1.hasCrates = caveData.hasCrates;
+                        sets1.hasTorches = caveData.hasTorches;
+                        sets1.hasCrystals = caveData.hasCrystals;
+                    }
                 }
                 
                 spawnOre(x1, y1, z1, sets1);
@@ -1920,7 +1929,7 @@ function loadNearbyChunks() {
             const [x, y, z] = generatingChunks3[i++].split("_").map(Number);
             if (generateChunk3(x, y, z)) check--;
             else check -= 0.25;
-            generatedChunks.add(`${x}_${y}_${z}`);
+            generatedChunks.add(`${k(x, y, z)}`);
         }
         generatingChunks3.shift();
         
@@ -2015,6 +2024,8 @@ function setProgress(x, y, z, dontSet = false, forcedProgress, noAdd = false) {
         } else if (pos.progress < 0) pos.progress = 0;
         
         if (!updated) updateBreakMesh(x, y, z, pos);
+
+        setInteracted(x, y, z);
     }
     return progress;
 }
@@ -2153,7 +2164,7 @@ function mine(x, y, z, settings = {}) {
     }
     
     if (ores[ore].onBreak) ores[ore].onBreak(x, y, z, inventory);
-    removeOre(x, y, z);
+    removeOre(x, y, z, settings);
     generateAdjacent(x, y, z, {forceUpdate: true});
     
     if (!settings.noExplosion && inventory.currentPickaxe.explosion) {
@@ -2191,6 +2202,7 @@ function mine(x, y, z, settings = {}) {
         inventory.currentPickaxe.onMine(x, y, z);
     }
     stats.toolsUsed[inventory.currentPickaxe.id] = (stats.toolsUsed[inventory.currentPickaxe.id] || 0) + 1;
+    setInteracted(x, y, z);
 }
 
 function rightClick() {
@@ -2207,7 +2219,7 @@ function rightClick() {
     if (!relativeFace) return;
     let rightClickFunc = false;
     
-    if (!used && hit.hit) {
+    if (!used && hit.hit && hit.distance < inventory.currentPickaxe.range) {
         const {x, y, z} = picked;
         
         if (ores[map.at(x, y, z).ore].onUse) {
@@ -2328,8 +2340,10 @@ function start() {
     locations[0][1] = topLayer(locations[0][0], locations[0][2]) + 1;
 
     if (new URLSearchParams(location.search).has("spawn")) {
-        const spawn = new URLSearchParams(location.search).get("spawn").split(",");
-        teleport(spawn[0], spawn[1], spawn[2]);
+        const spawn = new URLSearchParams(location.search).get("spawn").split(",").map(Number);
+        teleport(...spawn);
+    } else if (vars.save.position) {
+        teleport(vars.save.position.x, vars.save.position.y, vars.save.position.z, vars.save.rotation._x, vars.save.rotation._y);
     } else {
         player.position.y = locations[0][1] + 1;
     }
@@ -2337,7 +2351,7 @@ function start() {
     for (let i = 0; i < locations.length; i++) {
         const location = locations[i];
         const [x, y, z] = location;
-        generateOre(x, y - 1, z, "blackWall", "grass", {traits: ["protected"]});
+        if (!saveMap.at(x, y, z)) generateOre(x, y - 1, z, "blackWall", "grass", {traits: ["protected"]});
     }
     
     // start logo css animation
@@ -2888,6 +2902,11 @@ function tick() {
     // audio listener updates
     for (let i = 0; i < audios.length; i++) {
         const audio = audios[i];
+        if (map.at(audio.x, audio.y, audio.z).ore !== audio.ore) {
+            audio.audioEngine.dispose();
+            audios.splice(i--, 1);
+            continue;
+        }
         audio.audioEngine.listener.position.copyFrom(perspectiveCamera.position);
         audio.audioEngine.listener.rotation.copyFrom(perspectiveCamera.rotation);
         audio.audioEngine.listener.rotation.y += Math.PI;

@@ -47,10 +47,21 @@ function preciseRandom(x, y, z, seed, precisionDigits = 24) {
     return Number("0." + str);
 }
 
+const save = JSON.parse(localStorage.getItem(`tdd-saveMap-${vars.seed}`) ?? "{}");
+
 export default vars;
 export const map = new VoxelMap(); // the map of all blocks
 export const chunks = {}; // the map of all chunks
 export const breakMap = new VoxelMap();
+export const saveMap = new VoxelMap(save.save); // everything saved
+export const interacted = new VoxelMap(saveMap._obj);
+
+vars.save = {position: save.position, rotation: save.rotation};
+
+export function setInteracted(x, y, z) {
+    interacted.at(x, y, z, {...map.at(x, y, z)});
+    delete interacted.at(x, y, z).particles;
+}
 
 /**
  * Gets and sets the ore at a specific coordinate.
@@ -75,7 +86,7 @@ export function airAt(x, y, z) {
 }
 
 export function k(x, y, z) { // key
-    return `${x},${y},${z}`;
+    return `${x}_${y}_${z}`;
 }
 
 export function displayAlert(msg, color = "#fff", time = 10000, borderColor = "#000") {

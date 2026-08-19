@@ -1,6 +1,6 @@
 export class VoxelMap {
-    constructor() {
-        this._obj = {};
+    constructor(object) {
+        this._obj = object ?? {};
     }
 
     at(x, y, z, v) {

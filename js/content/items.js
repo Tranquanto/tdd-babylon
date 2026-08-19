@@ -2699,6 +2699,20 @@ let ores = {
             distance: 25,
             maxOpacity: 0.5
         },
+        getCanvas() {
+            const canvas = this.canvasElem;
+            /** @type {CanvasRenderingContext2D} */
+            const ctx = canvas.getContext("2d");
+
+            const imageData = ctx.createImageData(32, 32);
+            for (let i = 0; i < imageData.data.length; i += 4) {
+                imageData.data[i] = imageData.data[i + 1] = imageData.data[i + 2] = Math.floor(Math.random() * 150 + 105);
+                imageData.data[i + 3] = 255;
+            }
+            ctx.putImageData(imageData, 0, 0);
+            return this.canvasElem;
+        },
+        updateCanvas: true,
         noGeodeTexture: true
     },
     oil: {

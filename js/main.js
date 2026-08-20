@@ -32,6 +32,7 @@ let USE_THIN_INSTANCES = true;
 let totalOres = 0;
 let GUI_HIDDEN = false;
 let savesDisabled = false;
+let lastShadowUpdate = performance.now();
 
 let particleSystemID = 0, veinID = 0, geodeID = 0;
 
@@ -518,8 +519,16 @@ getElementById("bgm").volume = 0.25;
 scene.ambientColor = new BABYLON.Color3(0.01, 0.01, 0.01);
 
 const hemisphereLight = new BABYLON.HemisphericLight("hemisphereLight", new BABYLON.Vector3(0, 1, 0), scene);
-const directionalLight = new BABYLON.DirectionalLight("directionalLight", new BABYLON.Vector3(-0.5, -2, -1), scene);
+const directionalLight = new BABYLON.DirectionalLight("directionalLight", new BABYLON.Vector3(-0.5, -2, -1).normalize(), scene);
+directionalLight.shadowFrustumSize = 256;
+directionalLight.shadowMinZ = 0.1;
+directionalLight.shadowMaxZ = 512;
+directionalLight.falloffType = BABYLON.Light.FALLOFF_PHYSICAL;
 const cameraLight = new BABYLON.PointLight("cameraLight", perspectiveCamera.position, scene);
+
+const directionalLightShadow = new BABYLON.ShadowGenerator(4096, directionalLight);
+directionalLightShadow.bias = 0.0008;
+directionalLightShadow.usePercentageCloserFiltering = true;
 
 vars.directionalLight = directionalLight;
 
@@ -1008,6 +1017,9 @@ export async function generateOre(x, y, z, ore, bg, settings) {
                 }
             }
         }
+
+        directionalLightShadow.addShadowCaster(oreMesh);
+        oreMesh.receiveShadows = true;
         
         oreMesh.position.set(...chunkSplit);
         
@@ -2952,10 +2964,20 @@ function tick() {
     } else {
         scene.fogColor = BABYLON.Color3.Lerp(getColor(vars.fogColor), getColor(nightFog), Math.min(Math.max((0.2 - sunHeight) / 0.4, 0), 1));
     }
+
+    function round(n) {
+        return Math.round(n * 0.5) / 0.5;
+    }
     
-    directionalLight.position.copyFrom(offset.scale(1));
-    directionalLight.setDirectionToTarget(BABYLON.Vector3.Zero());
-    sun.position.copyFrom(perspectiveCamera.position).addInPlace(offset);
+    if (performance.now() - lastShadowUpdate > 500) {
+        directionalLight.position.copyFrom(player.position.add(offset.scale(0.25)));
+        directionalLight.setDirectionToTarget(player.position);
+        directionalLight.position.x = round(directionalLight.position.x);
+        directionalLight.position.y = round(directionalLight.position.y);
+        directionalLight.position.z = round(directionalLight.position.z);
+        sun.position.copyFrom(perspectiveCamera.position).addInPlace(offset);
+        lastShadowUpdate = performance.now();
+    }
     
     function hide() {
         getElementById("tooltip").style.display = "none";

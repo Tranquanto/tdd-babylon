@@ -39,7 +39,9 @@ let particleSystemID = 0, veinID = 0, geodeID = 0;
 const VEIN_CHANCE = 1 / 150, GEODE_CHANCE = 1 / 2000;
 
 // set up scene and camera
-const engine = navigator.gpu ? new BABYLON.Engine(canvas, true, {useLargeWorldRendering: true}) : new BABYLON.Engine(canvas, true, {useLargeWorldRendering: true});
+const engine = 
+// navigator.gpu ? new BABYLON.WebGPUEngine(canvas, {antialias: true}, {useLargeWorldRendering: true}) :
+new BABYLON.Engine(canvas, true, {useLargeWorldRendering: true});
 if (engine.initAsync !== undefined) await engine.initAsync();
 const scene = new BABYLON.Scene(engine);
 let perspectiveCamera = new BABYLON.UniversalCamera("camera1", new BABYLON.Vector3(0, 2, 0), scene);
@@ -504,7 +506,7 @@ addEventListener("beforeunload", () => {
     }
     localStorage.setItem("tdd-unlockedAchievements", JSON.stringify(unlockedAchievements));
 
-    if (!savesDisabled) localStorage.setItem(`tdd-saveMap-${vars.seed}`, JSON.stringify({save: interacted._obj, seed: vars.seed, position: {x: player.position.x, y: player.position.y, z: player.position.z}, rotation: perspectiveCamera.rotation}));
+    if (!savesDisabled) localStorage.setItem(`tdd-saveMap`, JSON.stringify({save: interacted._obj, seed: vars.seed, position: {x: player.position.x, y: player.position.y, z: player.position.z}, rotation: perspectiveCamera.rotation}));
 });
 
 const workers = {};
@@ -731,6 +733,27 @@ export async function generateOre(x, y, z, ore, bg, settings) {
         return map.at(x, y, z);
     } else if (!map.at(x, y, z)?.temp && ores[ore]) {
         removeOre(x, y, z, {fullyRemove: true});
+    }
+
+    let progress;
+    if (saveMap.at(x, y, z)) {
+        const block = saveMap.at(x, y, z);
+
+        if (!(settings.forced && block.ore === "air")) {
+            ore = block.ore;
+            bg = block.background ?? block.ore;
+            settings.chance = block.chance;
+            settings.offset = block.offset;
+            settings.rotation = block.rotation;
+            settings.scale = block.scale;
+            settings.properties = {...block};
+            progress = block.progress;
+        }
+
+        if (saveMap.at(x, y, z).ore === "air" && !settings.forced) {
+            map.at(x, y, z, true);
+            return map.at(x, y, z);
+        }
     }
     if (ore === undefined || ore === null) {
         if (!map.at(x, y, z)?.temp) map.at(x, y, z, true);
@@ -1073,8 +1096,9 @@ export async function generateOre(x, y, z, ore, bg, settings) {
     });
 
     if (settings.cssColor !== undefined) map.at(x, y, z).color = settings.cssColor;
+    if (settings.customModel !== undefined) map.at(x, y, z).customModel = settings.customModel;
 
-    Object.assign(map.at(x, y, z), settings.properties);
+    map.at(x, y, z, Object.assign({}, settings.properties, map.at(x, y, z)));
     totalOres++;
 
     if (ores[ore].textureHasTransparency && !settings.allowTransparent && !ores[ore].allowTransparent || ores[ore].forceAdjacent) {
@@ -1158,6 +1182,10 @@ export async function generateOre(x, y, z, ore, bg, settings) {
 
     if (settings.placed) {
         setInteracted(x, y, z);
+    }
+
+    if (progress !== undefined) {
+        setProgress(x, y, z, undefined, progress);
     }
     
     return map.at(x, y, z);
@@ -1461,23 +1489,8 @@ function spawnOre(x, y, z, settings) {
             if (!Object.keys(settings.cave).length) return map.at(x, y, z, {ore: "air", caveType: data.caveType});
         }
     }
-    
-    if (saveMap.at(x, y, z)) {
-        const block = saveMap.at(x, y, z);
-        oreData = {ore: block.ore, bg: block.background, chance: block.chance};
-        settings.offset = block.offset;
-        settings.rotation = block.rotation;
-        settings.scale = block.scale;
-        progress = block.progress;
-
-        if (saveMap.at(x, y, z).ore === "air") {
-            map.at(x, y, z, true);
-            return map.at(x, y, z);
-        }
-    } else {
-        if (!oreData?.ore) {
-            oreData = getOre(x, y, z, settings);
-        }
+    if (!oreData?.ore) {
+        oreData = getOre(x, y, z, settings);
     }
     if (!oreData || oreData.ore === null) {
         map.at(x, y, z, true);
@@ -1560,8 +1573,6 @@ workers.findEmpty.addEventListener("message", e => {
 });
 
 function generateVein(x, y, z, ore, count, isGuaranteed, chance, conditionLabel, settings = {}) {
-    if (settings.properties === undefined) settings.properties = {};
-    settings.properties.veinID = veinID++;
     let num = settings.num;
     let positions = [];
     if (typeof ore !== "string" || !ores[ore]) return;
@@ -1570,6 +1581,7 @@ function generateVein(x, y, z, ore, count, isGuaranteed, chance, conditionLabel,
     z = Math.round(z);
     let count2 = 0;
     let r = Math.floor(Math.cbrt(count) + 1);
+    veinID++;
 
     const candidates = [];
     for (let x1 = x - r; x1 <= x + r; x1++) {
@@ -1591,7 +1603,7 @@ function generateVein(x, y, z, ore, count, isGuaranteed, chance, conditionLabel,
     for (let i = 0; i < candidates.length; i++) {
         const pos = candidates[i];
         if (count2 >= count) break;
-        const oreData = generateOre(pos.x, pos.y, pos.z, ore, getBGOre(pos.x, pos.y, pos.z) ?? "shale", {isVein: true, veinCount: count + 1, noUpdate: true, chance, conditionLabel});
+        const oreData = generateOre(pos.x, pos.y, pos.z, ore, getBGOre(pos.x, pos.y, pos.z) ?? "shale", {isVein: true, veinCount: count + 1, noUpdate: true, chance, conditionLabel, properties: {veinID}});
         if (oreData && oreData.ore === ore) {
             positions.push(pos);
             count2++;
@@ -1619,15 +1631,13 @@ function generateVein(x, y, z, ore, count, isGuaranteed, chance, conditionLabel,
 }
 
 function generateGeode(x, y, z, radius = 4, ore, chance1, isGuaranteed, conditionLabel, settings = {}) {
-    if (settings.properties === undefined) settings.properties = {};
-    settings.properties.geodeID = geodeID++;
-
     let num = settings.num;
     if (typeof ore !== "string" || !ores[ore]) return;
     const outerGeode = layers[getLayer(y, x, z, false)]?.geode ?? "chalcedony";
     x = Math.round(x);
     y = Math.round(y);
     z = Math.round(z);
+    geodeID++;
     // only generate on the outermost layer
     for (let x1 = x - radius; x1 < x + radius; x1++) {
         for (let y1 = y - radius; y1 < y + radius; y1++) {
@@ -1636,7 +1646,7 @@ function generateGeode(x, y, z, radius = 4, ore, chance1, isGuaranteed, conditio
                 if (Math.sqrt((x1 - x) ** 2 + (y1 - y) ** 2 + (z1 - z) ** 2) < radius) {
                     if (Math.sqrt((x1 - x) ** 2 + (y1 - y) ** 2 + (z1 - z) ** 2) < radius - 1) {
                         if (Math.sqrt((x1 - x) ** 2 + (y1 - y) ** 2 + (z1 - z) ** 2) >= radius - 2) {
-                            generateOre(x1, y1, z1, ore, null, {isGeode: true, chance: chance1, conditionLabel});
+                            generateOre(x1, y1, z1, ore, null, {isGeode: true, chance: chance1, conditionLabel, properties: {geodeID}});
                         } else {
                             if (!map.at(x1, y1, z1)) map.at(x1, y1, z1, true);
                         }
@@ -2969,15 +2979,17 @@ function tick() {
         return Math.round(n * 0.5) / 0.5;
     }
     
-    if (performance.now() - lastShadowUpdate > 500) {
+    if (performance.now() - lastShadowUpdate > 1) {
         directionalLight.position.copyFrom(player.position.add(offset.scale(0.25)));
         directionalLight.setDirectionToTarget(player.position);
         directionalLight.position.x = round(directionalLight.position.x);
         directionalLight.position.y = round(directionalLight.position.y);
         directionalLight.position.z = round(directionalLight.position.z);
-        sun.position.copyFrom(perspectiveCamera.position).addInPlace(offset);
+
+        directionalLightShadow.bias = Math.max(0.0008, 0.05 - (offset.y / 3000));
         lastShadowUpdate = performance.now();
     }
+    sun.position.copyFrom(perspectiveCamera.position).addInPlace(offset);
     
     function hide() {
         getElementById("tooltip").style.display = "none";

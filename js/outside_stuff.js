@@ -47,7 +47,7 @@ function preciseRandom(x, y, z, seed, precisionDigits = 24) {
     return Number("0." + str);
 }
 
-const save = JSON.parse(localStorage.getItem(`tdd-saveMap-${vars.seed}`) ?? "{}");
+const save = JSON.parse(localStorage.getItem(`tdd-saveMap`) ?? "{}");
 
 export default vars;
 export const map = new VoxelMap(); // the map of all blocks

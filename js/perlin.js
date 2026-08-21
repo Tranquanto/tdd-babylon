@@ -206,7 +206,14 @@ function createWorley3D(seed) {
     }   
 }
 
-export const seed = Number(URLSearchParams && location ? new URLSearchParams(location.search).get("seed") : 0) || Math.floor(Math.random() * Number.MAX_SAFE_INTEGER / 100000) + 1;
+let tempSeed;
+try {
+    tempSeed = JSON.parse(localStorage.getItem("tdd-saveMap")).seed;
+} catch (e) {
+    tempSeed = undefined;
+}
+
+export const seed = (tempSeed ?? Number(URLSearchParams && location ? new URLSearchParams(location.search).get("seed") : 0)) || Math.floor(Math.random() * Number.MAX_SAFE_INTEGER / 100000) + 1;
 
 export const heightMapNoise = new PerlinNoise(seed + Math.sqrt(Math.E));
 export const heightMapNoiseLarge = new PerlinNoise(seed + Math.sqrt(Math.E) * 2);

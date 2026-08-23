@@ -11,6 +11,7 @@ const vars = {
     player: {
         /** @type {BABYLON.Vector3} */
         position: {x: 0, y: 6, z: 0},
+        rotation: {x: 0, y: 0},
         moveSpeed: 0.1,
         baseMoveSpeed: 0.1,
         velocity: {x: 0, y: 0, z: 0},
@@ -31,9 +32,9 @@ const vars = {
          * @param {Object} shake Shake parameters (intensity, duration), or false to disable shake (defaults to {intensity: 0.04, duration: 200})
          */
         damage(amount, cooldown, source, force, vignette = true, shake = {intensity: 0.04, duration: 200}) {
-            if (amount === 0 || this.godMode) return;
-            if (shake) vars.camera.shake(shake.intensity, shake.duration);
+            if (amount <= 0 || this.godMode) return;
             if (this.lastHit + cooldown > performance.now() && !force) return;
+            if (shake) vars.camera.shake(shake.intensity, shake.duration);
             if (cooldown) this.lastHit = performance.now();
             else this.lastHit = -Infinity;
             this.lastRealHit = performance.now();

@@ -75,7 +75,7 @@ function nd(input) {
 
 const _elemCache = {};
 function getElementById(id) {
-    if (_elemCache[id] === undefined || _elemCache[id] === null) {
+    if (!_elemCache[id] || !document.contains(_elemCache[id])) {
         return _elemCache[id] = document.getElementById(id);
     } else {
         return _elemCache[id];

@@ -12,9 +12,9 @@
 const replacedIds = { // for items that have been renamed; note: this will be removed on release
     gussite: "sunstone",
     teleporter: "marineTeleporter",
-    voidTeleporter: "marineTeleporter",
     slate: "shale",
-    slatePickaxe: "shalePickaxe"
+    slatePickaxe: "shalePickaxe",
+    ignimbrite: "chalk"
 };
 
 import vars from "../vars.js";
@@ -714,21 +714,21 @@ let ores = {
         chance: Infinity,
         maxY: -1001,
         minY: -1500,
-        str: 0.75,
+        str: 0.9,
         singleLayer: true,
         desc: "A light, soft stone with a lot of air holes.",
         creator: ["Tranquanto", "squid"],
         sfx: "stone"
     },
-    ignimbrite: {
-        name: "Ignimbrite",
-        color: "#b0b264",
+    chalk: {
+        name: "Chalk",
+        color: "#e4e4df",
         chance: Infinity,
         maxY: -1501,
         minY: -2000,
-        str: 1.2,
+        str: 0.8,
         singleLayer: true,
-        desc: "This rock seems to somehow be electrically charged.",
+        desc: "A very soft sedimentary rock.",
         sfx: "stone"
     },
     carnotite: {
@@ -1732,13 +1732,14 @@ let ores = {
         },
         customTexture: {
             ore: "noise",
+            src: true,
             item: {
                 src: "ash"
             }
         }
     },
 
-    // electric layer ores
+    // toxic layer ores
     biotite: {
         name: "Biotite",
         color: "#111",
@@ -1802,6 +1803,20 @@ let ores = {
         },
         cave: {
             ceiling: 2
+        },
+        tick(x, y, z) {
+            const pos = vars.player.position;
+
+            if (Math.abs(pos.x - x) < 0.6 && Math.abs(pos.z - z) < 0.6 && y - pos.y < 10) {
+                let open = true;
+                for (let dy = -1; dy > -10 && y + dy > pos.y + 1; dy--) {
+                    if (!airAt(x, y + dy, z)) {
+                        return open = false;
+                    }
+                }
+                
+                vars.player.damage((vars.player.rotation.x - 1.1) * -4, 500, "asbestos");
+            }
         }
     },
 
@@ -4633,7 +4648,7 @@ let items = {
         teleports: ["core", "mantle", "asthenosphere", "jungle", "marine", "frozen", "hell", "irradiated", "volcanic", "surface"],
         tags: ["teleporter"]
     },
-    voidTeleporter1: {
+    voidTeleporter: {
         name: "Void Teleporter",
         desc: "Allows you to teleport to the void or surface.",
         color: "#000",
@@ -5513,27 +5528,27 @@ let achievements = {
             return stats.oresMined.bedrock || stats.layersVisited.volcanic;
         }
     },
-    desertTraveler: {
-        name: "How Shocking",
-        desc: "Travel to the electric layer.",
+    enterToxic: {
+        name: "You have a gas mask, right?",
+        desc: "I wouldn't recommend taking deep breaths.",
         icon: "sandstone",
         preReq: ["bedrockBreaker"],
         progress() {
-            return stats.layersVisited.electric;
+            return stats.layersVisited.toxic;
         }
     },
     enterIrradiated: {
-        name: "Gonna need a hazmat suit",
-        desc: "Introducing a new hazard!", // enter the irradiated layer
+        name: "Placeholder",
+        desc: "This layer will be replaced", // enter the irradiated layer
         icon: "uranium",
-        preReq: ["bedrockBreaker"],
+        preReq: ["enterToxic"],
         progress() {
             return stats.layersVisited.irradiated;
         }
     },
     enterNuclear: {
-        name: "Maybe multiple",
-        desc: "It's extremely radioactive here.",
+        name: "Gonna Need a Hazmat Suit Too",
+        desc: "Now introducing: radiation!",
         icon: "plutonium",
         preReq: ["enterIrradiated"],
         progress() {

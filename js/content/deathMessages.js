@@ -25,5 +25,9 @@ export const deathMessages = {
     collision: [
         "%s crashed into a wall",
         "%s flew into a wall at a high speed"
+    ],
+    asbestos: [
+        "%s inhaled asbestos",
+        "%s wasn't paying attention to the ceiling"
     ]
 };

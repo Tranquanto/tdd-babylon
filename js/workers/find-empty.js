@@ -91,6 +91,7 @@ self.addEventListener("message", e => {
     // if (rand01(minX, minY, minZ, seed + Math.E * 9) < 0.15 && y < 0 && y >= -7000) caveType = "moss"; // 15% chance for a mossy cave
     // else if (hasCrystals && rand01(minX, minY, minZ, seed + Math.E * 10) < 0.02) caveType = "enchanted";
 
+    // TODO: remove this worker and move dripstones/torches/crystals to getOre()
     const dripstones = {};
     const dripstoneArr = [];
 

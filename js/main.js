@@ -7,7 +7,6 @@ import { inventory, toggleInventory, unlockAchievement } from "./inventory.js";
 import { rand01 } from "./perlin.js";
 import { getColor } from "./getColor.js";
 import { oreParticles } from "./content/oreParticles.js";
-import { VoxelMap } from "./VoxelMap.js";
 
 const { player, stats, camera } = vars;
 
@@ -593,6 +592,7 @@ cameraLight.falloffType = BABYLON.Light.FALLOFF_PHYSICAL;
 
 const halfBoundingBox = {x: 0.25, y: 0.9, z: 0.25};
 const checkCollision = (pos, returnOre, includeNoCollision) => {
+    spawnOre(pos.x, pos.y, pos.z);
     const minX = Math.floor(pos.x - halfBoundingBox.x + 0.5);
     const maxX = Math.floor(pos.x + halfBoundingBox.x + 0.5);
     const minY = Math.floor(pos.y - halfBoundingBox.y + 0.9);
@@ -607,6 +607,7 @@ const checkCollision = (pos, returnOre, includeNoCollision) => {
             for (let z of [minZ, maxZ]) {
                 if (
                     y < 0 && !map.at(x, y, z) && !isCave(x, y, z) && checkAdjacent(x, y, z, isCave) ||
+                    saveMap.at(x, y, z) && !map.at(x, y, z) ||
                     oreAt(x, y, z) && ores[map.at(x, y, z).ore] &&
                     (includeNoCollision || !(
                         map.at(x, y, z).noCollision ||
@@ -699,17 +700,18 @@ function getTexture(ore, type = "ore", face, setTransparent) {
             ore = ores[id].emissive.map ?? id;
         } else if (ores[id]?.customTexture) {
             ore = ores[id].customTexture?.ore ?? id;
+            if (ores[id].customTexture?.src) type = "src";
         }
     }
     
-    if (!textures[`${ore}`]) {
+    if (!textures[`${ore}_${type}`]) {
         const texture = new BABYLON.Texture(`img/block/${ore}.png`, scene, false, false, BABYLON.Texture.NEAREST_SAMPLINGMODE);
         if (setTransparent || type === "particle") texture.hasAlpha = true;
         texture.wAng = Math.PI;
-        textures[`${ore}`] = texture;
+        textures[`${ore}_${type}`] = texture;
     }
     
-    return textures[`${ore}`];
+    return textures[`${ore}_${type}`];
 }
 
 vars.getTexture = getTexture;
@@ -754,6 +756,12 @@ export async function generateOre(x, y, z, ore, bg, settings) {
             map.at(x, y, z, true);
             return map.at(x, y, z);
         }
+
+        if (!ores[ore]) {
+            saveMap.at(x, y, z, "delete");
+            return;
+        }
+        if (!ores[bg]) bg = ore;
     }
     if (ore === undefined || ore === null) {
         if (!map.at(x, y, z)?.temp) map.at(x, y, z, true);
@@ -1178,6 +1186,10 @@ export async function generateOre(x, y, z, ore, bg, settings) {
         map.at(x, y, z).particles = ps;
     }
     
+    if (ores[ore].tick) {
+        vars.oreTicks.push({x, y, z, ore, tick: ores[ore].tick});
+    }
+
     if (ores[ore].onGenerate) ores[ore].onGenerate(x, y, z, settings, map.at(x, y, z));
 
     if (settings.placed) {
@@ -1311,26 +1323,30 @@ function removeOre(x, y, z, settings = {}) {
                     console.warn("Could not remove instance of mesh", meshID, "with index", index);
                 }
             }
-            if (!settings.keep) {
-                if (!settings.fullyRemove) map.at(x, y, z, true);
-                else map.at(x, y, z, "delete");
+
+            if (!settings.fullyRemove) {
+                map.at(x, y, z, true);
+            } else {
+                map.at(x, y, z, "delete");
             }
         } else {
-            if (!settings.keep) {
-                if (!settings.fullyRemove) map.at(x, y, z, true);
-                else map.at(x, y, z, "delete");
+            if (!settings.fullyRemove) {
+                map.at(x, y, z, true);
+            } else {
+                map.at(x, y, z, "delete");
             }
         }
-        if (!settings.keep) {
-            const chunk = getChunk(x, y, z);
-            const index = chunk.indexOf(`${k(x, y, z)}`);
-            if (index !== -1) {
-                chunk.splice(index, 1);
-            }
+
+        const chunk = getChunk(x, y, z);
+        const index = chunk.indexOf(`${k(x, y, z)}`);
+        if (index !== -1) {
+            chunk.splice(index, 1);
         }
     } else {
         map.at(x, y, z, true);
     }
+
+    if (!settings.fullyRemove) setInteracted(x, y, z);
 }
 
 function getPickedOreCoords(hit) {
@@ -2224,7 +2240,6 @@ function mine(x, y, z, settings = {}) {
         inventory.currentPickaxe.onMine(x, y, z);
     }
     stats.toolsUsed[inventory.currentPickaxe.id] = (stats.toolsUsed[inventory.currentPickaxe.id] || 0) + 1;
-    setInteracted(x, y, z);
 }
 
 function rightClick() {
@@ -2352,8 +2367,8 @@ for (let i = 0; i < oreArray.length; i++) {
         ore.canvasElem.width = 32;
         ore.canvasElem.height = 32;
         if (ore.updateCanvas) animatedCanvases.push(ore.id);
-        textures[ore.id] = new BABYLON.DynamicTexture(`${ore.name}CanvasTexture`, ore.getCanvas(), scene, true, BABYLON.Texture.NEAREST_SAMPLINGMODE, undefined, true);
-        textures[ore.id]?.update();
+        textures[ore.id + "_ore"] = new BABYLON.DynamicTexture(`${ore.name}CanvasTexture`, ore.getCanvas(), scene, true, BABYLON.Texture.NEAREST_SAMPLINGMODE, undefined, true);
+        textures[ore.id + "_ore"]?.update();
     }
 }
 
@@ -2369,6 +2384,7 @@ function start() {
     } else {
         player.position.y = locations[0][1] + 1;
     }
+    player.rotation = perspectiveCamera.rotation;
     
     for (let i = 0; i < locations.length; i++) {
         const location = locations[i];
@@ -2427,7 +2443,7 @@ function tick() {
     
     for (let i = 0; i < animatedCanvases.length; i++) {
         ores[animatedCanvases[i]].getCanvas();
-        textures[animatedCanvases[i]]?.update();
+        textures[animatedCanvases[i] + "_ore"]?.update();
     }
 
     itemTick();
@@ -2729,7 +2745,7 @@ function tick() {
                 nextPos.x = player.position.x;
                 velocity.x = 0;
                 
-                if (Math.abs(player.lastVelocity.x) > 0.3) player.damage(Math.max((Math.abs(player.lastVelocity.x) - 0.3) * 60, 0), 0, "collision", true);
+                if (Math.abs(player.lastVelocity.x) > 0.3) player.damage((Math.abs(player.lastVelocity.x) - 0.3) * 60, 0, "collision", true);
             }
             if (!canMoveY) {
                 nextPos.y = player.position.y;
@@ -2739,7 +2755,7 @@ function tick() {
                 nextPos.z = player.position.z;
                 velocity.z = 0;
                 
-                if (Math.abs(player.lastVelocity.z) > 0.3) player.damage(Math.max((Math.abs(player.lastVelocity.z) - 0.3) * 60, 0), 0, "collision", true);
+                if (Math.abs(player.lastVelocity.z) > 0.3) player.damage((Math.abs(player.lastVelocity.z) - 0.3) * 60, 0, "collision", true);
             }
             
             const dist = BABYLON.Vector3.Distance(player.position, nextPos);
@@ -2764,7 +2780,7 @@ function tick() {
                     canJump = true;
                 }
                 if (collisionResult !== 2) {
-                    if (Math.abs(player.lastVelocity.y) > 0.3) player.damage(Math.max((Math.abs(player.lastVelocity.y) - 0.3) * 60, 0), 0, player.lastVelocity.y < 0 && !vars.fly ? "fall" : "collision", true);
+                    if (Math.abs(player.lastVelocity.y) > 0.3) player.damage((Math.abs(player.lastVelocity.y) - 0.3) * 60, 0, player.lastVelocity.y < 0 && !vars.fly ? "fall" : "collision", true);
                 }
             }
             
@@ -2997,6 +3013,15 @@ function tick() {
         LAST_ORE = [];
         CURRENT_ORE = [];
     }
+
+    // tick functions
+    vars.globalTickFuncs.forEach(func => {
+        func();
+    });
+    vars.oreTicks.forEach(oreTick => {
+        const {x, y, z} = oreTick;
+        oreTick.tick(x, y, z);
+    });
     
     // raycasting
     const raycaster = perspectiveCamera.getForwardRay(inventory.currentPickaxe.range);

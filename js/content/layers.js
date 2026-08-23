@@ -207,7 +207,7 @@ const layers = {
     },
     volcanic: {
         name: "Volcanic",
-        desc: "After crossing the bedrock, you find yourself in a hot layer made of volcanic rock.",
+        desc: "A hot layer made of volcanic rock.",
         item: "pumice",
         max: -1000,
         min: -1500,
@@ -217,10 +217,10 @@ const layers = {
         color: "#bcb87e",
         music: "startijer - Magmatic Flumes (OST)"
     },
-    electric: {
-        name: "Electric",
-        desc: "A layer buzzing with electricity.",
-        item: "ignimbrite",
+    toxic: {
+        name: "Toxic",
+        desc: "A layer full of poisonous minerals.",
+        item: "chalk",
         max: -1500,
         min: -2000,
         lighting: {color: "#ff9", intensity: 0.3},
@@ -261,7 +261,7 @@ const layers = {
         music: "Tranquanto - The Underworld (OST)"
     },
     intertemperate: {
-        name: "Intertemperate",
+        name: "Median",
         desc: "A suspiciously peaceful layer after the hottest.",
         item: "pegmatite",
         max: -3500,
@@ -269,7 +269,7 @@ const layers = {
         lighting: {color: "#ffa", intensity: 0.3},
         fog: 120,
         fogColor: "#8b8b7e",
-        music: "Tranquanto - Intertemperate (OST)",
+        music: "Tranquanto - Median (OST)",
         caveNoise(x, y, z, CAVE_SIZE) {
             return this.perlinNoise.noise(
                 x / CAVE_SIZE + Math.sin(x / CAVE_SIZE / 3 + this.xOffset) * 4,

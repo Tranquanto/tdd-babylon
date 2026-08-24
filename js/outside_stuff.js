@@ -2,7 +2,6 @@ import vars from "./vars.js";
 import { ores, layers, perLayerOreArray, getLayer } from "./content/items.js";
 import { rand01, heightMapNoise, heightMapNoiseLarge, heightMapMountain, heightMapMountainLarge, BIOME_INTERVAL } from "./perlin.js";
 import { isCave } from "./noise.js";
-import Color from "./color.js";
 import { VoxelMap } from "./VoxelMap.js";
 
 export function checkAdjacent(x, y, z, func, includeCenter = false) {
@@ -83,10 +82,6 @@ export function oreAt(x, y, z) {
 
 export function airAt(x, y, z) {
     return map.at(x, y, z) && airs[map.at(x, y, z).ore];
-}
-
-export function k(x, y, z) { // key
-    return `${x}_${y}_${z}`;
 }
 
 export function displayAlert(msg, color = "#fff", time = 10000, borderColor = "#000") {

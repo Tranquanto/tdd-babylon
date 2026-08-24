@@ -1,5 +1,7 @@
+"use strict";
+
 import vars from "./vars.js";
-import { getOre, map, k, oreAt, airAt, checkAdjacent, calculatePower, calculateRarity, chunks, getBGOre, breakMap, saveMap, interacted, setInteracted } from "./outside_stuff.js";
+import { getOre, map, oreAt, airAt, checkAdjacent, calculatePower, calculateRarity, chunks, getBGOre, breakMap, saveMap, interacted, setInteracted } from "./outside_stuff.js";
 import { getLayer, items, layers, locations, oreArray, ores, structureArray, structures, tiers, traits, sfxOptions, achievementArray } from "./content/items.js";
 import { biomes, getBiomeNumber, getHumidity, getTemperature, topLayer } from "./content/layers.js";
 import { isCave, CHUNK3_RATE, CHUNK_SIZE_3, CHUNK_SIZE, noise, isCaveFloor, isCaveCeiling } from "./noise.js";
@@ -7,6 +9,7 @@ import { inventory, toggleInventory, unlockAchievement } from "./inventory.js";
 import { rand01 } from "./perlin.js";
 import { getColor } from "./getColor.js";
 import { oreParticles } from "./content/oreParticles.js";
+import { VoxelMap, k } from "./VoxelMap.js";
 
 const { player, stats, camera } = vars;
 
@@ -26,12 +29,14 @@ let LAST_ORE = [], CURRENT_ORE = [];
 let CURRENT_LAYER, INITIALIZED_LAYER = false;
 let generatingChunks = [], generatingChunks3 = [], generatedChunks = new Set(), GENERATION_DISTANCE = 64;
 let generatedStructures = {};
-let lightArr = [], radArr = [], repairArr = [], repairObj = {}, lightKeys = {};
+let lightArr = [], repairArr = [], repairObj = {}, lightKeys = {};
 let USE_THIN_INSTANCES = true;
 let totalOres = 0;
 let GUI_HIDDEN = false;
 let savesDisabled = false;
 let lastShadowUpdate = performance.now();
+
+let radiationMap = new VoxelMap(null, {regionSize: 16});
 
 let particleSystemID = 0, veinID = 0, geodeID = 0;
 
@@ -119,6 +124,7 @@ sunGlow.customEmissiveColorSelector = (mesh, _subMesh, _material, result) => {
 }
 
 let geigerAudio = new Audio("audio/geiger.mp3");
+geigerAudio.volume = 0.15;
 
 export function resize() {
     canvas.width = window.innerWidth;
@@ -1185,6 +1191,15 @@ export async function generateOre(x, y, z, ore, bg, settings) {
         ps.start();
         map.at(x, y, z).particles = ps;
     }
+
+    if (ores[ore].radiation) {
+        radiationMap.at(x, y, z, {
+            position: new BABYLON.Vector3(x + settings.offset.x || 0, y + settings.offset.y || 0, z + settings.offset.z || 0),
+            strength: ores[ore].radiation,
+            name: `rad-${k(x, y, z)}`,
+            falloff: ores[ore].radiationFalloff || 0.2
+        });
+    }
     
     if (ores[ore].tick) {
         vars.oreTicks.push({x, y, z, ore, tick: ores[ore].tick});
@@ -1292,10 +1307,7 @@ function removeOre(x, y, z, settings = {}) {
                     }
                     
                     // remove radiation
-                    const radIndex = radArr.findIndex(r => r.name === `rad-${k(x, y, z)}`);
-                    if (radIndex !== -1) {
-                        radArr.splice(radIndex, 1);
-                    }
+                    radiationMap.at(x, y, z, "delete");
                     
                     // remove from repair list
                     if (repairObj[`${k(x, y, z)}`]) {
@@ -3092,13 +3104,20 @@ function tick() {
     player.radiation *= 0.95 ** FRAME_TIME; // decay radiation over time
     player.radiation -= 0.3 * FRAME_TIME; // slight radiation loss over time
     netChange = player.radiation - netChange;
-    for (let i = 0; i < radArr.length; i++) {
-        const source = radArr[i];
-        const dist = BABYLON.Vector3.Distance(player.position, source.position);
-        if (dist < 15) {
-            const r = source.strength * (1 - source.falloff) ** Math.max(dist - 2, 0) ** 2 * FRAME_TIME;
-            player.radiation += r;
-            netChange += r;
+
+    const regions = radiationMap.getClosestRegions(player.position.x, player.position.y, player.position.z, 2);
+
+    for (let i = 0; i < regions.length; i++) {
+        const region = regions[i];
+        const sources = radiationMap.getAllInRegion(region.x, region.y, region.z);
+        for (let j = 0; j < sources.length; j++) {
+            const source = radiationMap._obj[sources[j]];
+            const dist = BABYLON.Vector3.Distance(player.position, source.position);
+            if (dist < 15) {
+                const r = source.strength * (1 - source.falloff) ** Math.max(dist - 2, 0) ** 2 * FRAME_TIME;
+                player.radiation += r;
+                netChange += r;
+            }
         }
     }
     if (inventory.currentPickaxe.radiation) {
@@ -3107,11 +3126,12 @@ function tick() {
         netChange += rad;
     }
     if (netChange > 0) {
-        if (!geigerAudio.isPlaying) {
+        if (geigerAudio.paused) {
             geigerAudio.play();
         }
-    } else if (geigerAudio.isPlaying) {
-        geigerAudio.stop();
+    } else if (!geigerAudio.paused) {
+        geigerAudio.pause();
+        geigerAudio.currentTime = 0;
     }
     if (player.radiation > 12.5) {
         player.damage(((player.radiation) * 0.08 - 1) * FRAME_TIME, 0, "radiation", true, false, false);

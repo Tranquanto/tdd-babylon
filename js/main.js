@@ -4,7 +4,7 @@ import vars from "./vars.js";
 import { getOre, map, oreAt, airAt, checkAdjacent, calculatePower, calculateRarity, chunks, getBGOre, breakMap, saveMap, interacted, setInteracted } from "./outside_stuff.js";
 import { getLayer, items, layers, locations, oreArray, ores, structureArray, structures, tiers, traits, sfxOptions, achievementArray } from "./content/items.js";
 import { biomes, getBiomeNumber, getHumidity, getTemperature, topLayer } from "./content/layers.js";
-import { isCave, CHUNK3_RATE, CHUNK_SIZE_3, CHUNK_SIZE, noise, isCaveFloor, isCaveCeiling } from "./noise.js";
+import { isCave, CHUNK3_RATE, CHUNK_SIZE_3, CHUNK_SIZE, noise, isCaveFloor, isCaveCeiling, caveFloorAdjacent, caveWallAdjacent, caveCeilingAdjacent } from "./noise.js";
 import { inventory, toggleInventory, unlockAchievement } from "./inventory.js";
 import { rand01 } from "./perlin.js";
 import { getColor } from "./getColor.js";
@@ -513,13 +513,6 @@ addEventListener("beforeunload", () => {
 
     if (!savesDisabled) localStorage.setItem(`tdd-saveMap`, JSON.stringify({save: interacted._obj, seed: vars.seed, position: {x: player.position.x, y: player.position.y, z: player.position.z}, rotation: perspectiveCamera.rotation}));
 });
-
-const workers = {};
-workers.findEmpty = new Worker("js/workers/find-empty.js", {type: "module"});
-workers.findEmpty.addEventListener("message", e => {
-    console.log("Message received from find-empty worker:", e.data);
-});
-workers.findEmpty.postMessage({seed: vars.seed});
 
 getElementById("bgm").volume = 0.25;
 
@@ -1473,50 +1466,57 @@ function spawnOre(x, y, z, settings) {
         }
     }
     
-    const noiseVal = noise(x, y, z);
-    if (noiseVal.value > noiseVal.caveReq && !map.at(x, y, z)?.temp) {
-        if (!settings.noCave) generateCave(x, y, z);
-        return map.at(x, y, z);
-    }
-    
     if (isCaveFloor(x, y, z)) settings.isCaveFloor = true;
     if (isCaveCeiling(x, y, z)) settings.isCaveCeiling = true;
     if (!Object.keys(settings.cave).length) delete settings.cave;
     
-    let oreData;
-    
-    if (map.at(x, y, z)?.temp) {
-        const data = map.at(x, y, z);
-        oreData = {};
-        
-        if (data.dripstone) {
-            const bgOre = getBGOre(...data.dripstone.source);
+    let oreData = {ore: null};
 
-            if (!ores[bgOre]?.noDripstone) {
-                oreData.ore = oreData.bg = bgOre;
-                settings.noVein = true;
-                settings.noGeode = true;
-                settings.scale.x = settings.scale.z = data.dripstone.size;
+    if (isCave(x, y, z)) {
+        settings.cave = {};
+        settings.caveAir = true;
+
+        // check for dripstone
+        let dripstone = false;
+
+        function check(x, y, z) {
+            return !layers[getLayer(y, x, z, false)]?.caveRules?.noDripstone;
+        }
+
+        let pos = [x, y, z];
+
+        for (let i = 0; i < 4; i++) {
+            if (caveFloorAdjacent(...pos, vars.seed)) {
+                if (rand01(...pos, vars.seed + Math.E * 3) < 0.05 && check(pos[0], pos[1] - 1, pos[2]) && rand01(...pos, vars.seed + Math.E * 4) < 0.8 ** (i + 1)) {
+                    dripstone = true;
+                    const size = (4 - i) / 5;
+                    const bgOre = getBGOre(pos[0], pos[1] - 1, pos[2]);
+
+                    if (!ores[bgOre]?.noDripstone) {
+                        oreData.ore = oreData.bg = bgOre;
+                        settings.noVein = true;
+                        settings.noGeode = true;
+                        settings.scale.x = settings.scale.z = size;
+                    }
+                }
+                break;
             } else {
-                delete data.dripstone;
+                pos[1]--;
             }
         }
-        if (!data.dripstone) {
+
+        if (!dripstone) {
             settings.cave = {};
             settings.caveAir = true;
-            if (data.caveFloor) {
-                settings.cave = { floor: true };
-            }
-            if (data.caveCeiling) {
-                settings.cave.ceiling = true;
-            }
-            if (data.caveWall) {
-                settings.cave.walls = data.caveWall;
-            }
+
+            settings.cave.floor = caveFloorAdjacent(x, y, z, vars.seed);
+            settings.cave.ceiling = caveCeilingAdjacent(x, y, z, vars.seed);
+            settings.cave.walls = caveWallAdjacent(x, y, z, vars.seed);
             settings.cave.air = true;
-            if (!Object.keys(settings.cave).length) return map.at(x, y, z, {ore: "air", caveType: data.caveType});
+            if (!Object.keys(settings.cave).length) return map.at(x, y, z, {ore: "air"});
         }
     }
+
     if (!oreData?.ore) {
         oreData = getOre(x, y, z, settings);
     }
@@ -1580,25 +1580,7 @@ function generateCave(x, y, z) {
     x = Math.round(x);
     y = Math.round(y);
     z = Math.round(z);
-    
-    workers.findEmpty.postMessage({x, y, z, seed: vars.seed});
 }
-
-workers.findEmpty.addEventListener("message", e => {
-    const data = e.data;
-    const {mToSend, mToModify, priorityChunksToAdd} = data;
-    
-    for (let i = 0; i < mToSend.length; i++) {
-        if (!map.at(...(mToSend[i].slice(0, 3)))) {
-            map.at(...mToSend[i]);
-        }
-    }
-    for (let i = 0; i < mToModify.length; i++) {
-        const j = mToModify[i];
-        map.at(j[0], j[1], j[2])[j[3]] = j[4];
-    }
-    generatedChunks = generatedChunks.difference(priorityChunksToAdd);
-});
 
 function generateVein(x, y, z, ore, count, isGuaranteed, chance, conditionLabel, settings = {}) {
     let num = settings.num;
@@ -1847,7 +1829,7 @@ export function generateStructure(gridX, gridY, gridZ, structure, settings) {
                 z + pos[2],
                 palette[state].name,
                 getBGOre(x + pos[0], y + pos[1], z + pos[2]),
-                settings || { noUpdate: true }
+                settings || {}
             );
         }
     }
@@ -1887,11 +1869,10 @@ function generateChunk(x, z) {
     }
 }
 
-function generateChunk3(x, y, z, noCave = false) { // used for places like space
+function generateChunk3(x, y, z) { // used for places like space
     let generatedAny = false;
     let startTime = performance.now();
     const sets = {};
-    // 2if (noCave) sets.noCave = true;
     for (let x1 = x * CHUNK_SIZE_3; x1 < (x + 1) * CHUNK_SIZE_3; x1++) {
         for (let y1 = y * CHUNK_SIZE_3; y1 < (y + 1) * CHUNK_SIZE_3; y1++) {
             for (let z1 = z * CHUNK_SIZE_3; z1 < (z + 1) * CHUNK_SIZE_3; z1++) {

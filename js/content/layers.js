@@ -739,30 +739,18 @@ const biomes = {
         desc: "A biome of clay.",
         maxY: -1,
         minY: -10,
-        requirement() {
-            return false;
-        },
-        threshold: 0.6,
-        lighting: {color: "#fff", intensity: 0.4},
-        fog: 1000,
-        fogColor: layers.surface.fogColor,
-        size: 25
+        size: 25,
+        cosmetic: true
     },
     dirt: {
         name: "Dirt",
         size: 15,
         maxY: minHeight,
         minY: -1000,
-        requirement() {
-            return false;
-        },
         modifier(n, _x, y, _z) {
             return y < -900 ? n * (y / 100 + 10) : n;
         },
-        threshold: 2, // never spawns; intended to be avoided in checkAllBiomes
-        lighting: {color: "#fff", intensity: 0.4},
-        fog: 1000,
-        fogColor: layers.surface.fogColor
+        cosmetic: true
     },
     subzero: {
         name: "Subzero",
@@ -826,6 +814,46 @@ const biomes = {
         size: 200,
         requirement(x, y, z) {
             return getBiomeNumber(x, y, z, "enchantedCave") >= 0.5318; // genuinely ~2% chance :sob:
+        },
+        cosmetic: true
+    },
+    caveDecorationTorches: {
+        name: "Cave Torches",
+        maxY: 0,
+        minY: -9999,
+        size: 150,
+        requirement(x, y, z) {
+            return getBiomeNumber(x, y, z, "caveDecorationTorches") >= 0;
+        },
+        cosmetic: true
+    },
+    caveDecorationExtinguishedTorches: {
+        name: "Cave Extinguished Torches",
+        maxY: 0,
+        minY: -9999,
+        size: 150,
+        requirement(x, y, z) {
+            return getBiomeNumber(x, y, z, "caveDecorationTorches") >= 0;
+        },
+        cosmetic: true
+    },
+    caveDecorationCrystals: {
+        name: "Cave Crystals",
+        maxY: 0,
+        minY: -Infinity,
+        size: 150,
+        requirement(x, y, z) {
+            return getBiomeNumber(x, y, z, "caveDecorationTorches") >= 0.1511; // ~30% chance
+        },
+        cosmetic: true
+    },
+    caveDecorationCrates: {
+        name: "Cave Crates",
+        maxY: 0,
+        minY: -Infinity,
+        size: 150,
+        requirement(x, y, z) {
+            return getBiomeNumber(x, y, z, "caveDecorationCrates") >= 0.2414; // ~20% chance
         },
         cosmetic: true
     }

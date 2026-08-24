@@ -3333,7 +3333,7 @@ let ores = {
             }
         },
         condition(x, y, z) {
-            return map.at(x, y, z).hasCrystals;
+            return biomes.caveDecorationCrystals.requirement(x, y, z);
         },
         onBeforeGenerate(x, y, z, settings) {
             settings.customModel = "crystal";
@@ -3838,7 +3838,7 @@ let ores = {
             floor: true
         },
         condition(x, y, z) {
-            return map.at(x, y, z).hasTorches;
+            return biomes.caveDecorationTorches.requirement(x, y, z);
         }
     },
     extinguishedTorch: {
@@ -3865,7 +3865,7 @@ let ores = {
             floor: true
         },
         condition(x, y, z) {
-            return map.at(x, y, z).hasExtinguishedTorches;
+            return biomes.caveDecorationExtinguishedTorches.requirement(x, y, z);
         },
         drops: [{id: "wood", count: () => Math.round(Math.random())}, {id: "coal", count: () => Math.round(Math.random())}]
     },
@@ -3965,6 +3965,12 @@ let ores = {
         excludeFromWiki: 2,
         desc: "A crate that contains various ores.",
         sfx: "wood",
+        cave: {
+            floor: true
+        },
+        condition(x, y, z) {
+            return biomes.caveDecorationCrates.requirement(x, y, z);
+        },
         onBreak(x, y, z, inventory) {
             if (!map.at(x, y, z).placed) {
                 // gives random ores

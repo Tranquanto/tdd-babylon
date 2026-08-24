@@ -1807,7 +1807,7 @@ let ores = {
         tick(x, y, z) {
             const pos = vars.player.position;
 
-            if (Math.abs(pos.x - x) < 0.6 && Math.abs(pos.z - z) < 0.6 && y - pos.y < 10) {
+            if (Math.abs(pos.x - x) < 0.6 && Math.abs(pos.z - z) < 0.6 && y - pos.y < 10 && y - pos.y > 0) {
                 let open = true;
                 for (let dy = -1; dy > -10 && y + dy > pos.y + 1; dy--) {
                     if (!airAt(x, y + dy, z)) {

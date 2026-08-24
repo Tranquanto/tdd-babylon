@@ -606,7 +606,7 @@ const checkCollision = (pos, returnOre, includeNoCollision) => {
             for (let z of [minZ, maxZ]) {
                 if (
                     y < 0 && !map.at(x, y, z) && !isCave(x, y, z) && checkAdjacent(x, y, z, isCave) ||
-                    saveMap.at(x, y, z) && !map.at(x, y, z) ||
+                    saveMap.at(x, y, z) && saveMap.at(x, y, z).ore !== "air" && !map.at(x, y, z) ||
                     oreAt(x, y, z) && ores[map.at(x, y, z).ore] &&
                     (includeNoCollision || !(
                         map.at(x, y, z).noCollision ||
@@ -747,6 +747,7 @@ export async function generateOre(x, y, z, ore, bg, settings) {
             settings.offset = block.offset;
             settings.rotation = block.rotation;
             settings.scale = block.scale;
+            settings.placed = block.placed;
             settings.properties = {...block};
             progress = block.progress;
         }
@@ -1201,6 +1202,7 @@ export async function generateOre(x, y, z, ore, bg, settings) {
     if (ores[ore].onGenerate) ores[ore].onGenerate(x, y, z, settings, map.at(x, y, z));
 
     if (settings.placed) {
+        map.at(x, y, z).placed = true;
         setInteracted(x, y, z);
     }
 
@@ -1472,7 +1474,7 @@ function spawnOre(x, y, z, settings) {
     
     let oreData = {ore: null};
 
-    if (isCave(x, y, z)) {
+    if (isCave(x, y, z) && !saveMap.at(x, y, z)) {
         settings.cave = {};
         settings.caveAir = true;
 

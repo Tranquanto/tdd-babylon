@@ -1,7 +1,7 @@
 "use strict";
 
 import vars from "./vars.js";
-import { getOre, map, oreAt, airAt, checkAdjacent, calculatePower, calculateRarity, chunks, getBGOre, breakMap, saveMap, interacted, setInteracted } from "./outside_stuff.js";
+import { getOre, map, oreAt, airAt, checkAdjacent, calculatePower, calculateRarity, chunks, getBGOre, breakMap, saveMap, interacted, setInteracted } from "./noise-utilities.js";
 import { getLayer, items, layers, locations, oreArray, ores, structureArray, structures, tiers, traits, sfxOptions, achievementArray } from "./content/items.js";
 import { biomes, getBiomeNumber, getHumidity, getTemperature, topLayer } from "./content/layers.js";
 import { isCave, CHUNK3_RATE, CHUNK_SIZE_3, CHUNK_SIZE, noise, isCaveFloor, isCaveCeiling, caveFloorAdjacent, caveWallAdjacent, caveCeilingAdjacent } from "./noise.js";

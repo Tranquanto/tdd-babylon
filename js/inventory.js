@@ -1,5 +1,5 @@
 import { ores, items, recipes, replacedIds, tiers, layers, achievements, achievementArray, animations, getLayer } from './content/items.js';
-import vars, { getBGOre, calculateChance, displayAlert } from './outside_stuff.js';
+import vars, { getBGOre, calculateChance, displayAlert } from './noise-utilities.js';
 
 const GAME_MODE = "normal";
 const minAllowedY = -8000, maxAllowedY = 3000;

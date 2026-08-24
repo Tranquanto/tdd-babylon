@@ -1,4 +1,4 @@
-import vars from "./outside_stuff.js";
+import vars from "./vars.js";
 import { resize } from "./main.js";
 
 getElementById("play-btn").addEventListener("click", () => {

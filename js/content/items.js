@@ -18,7 +18,7 @@ const replacedIds = { // for items that have been renamed; note: this will be re
 };
 
 import vars from "../vars.js";
-import { getOre, map, airAt } from "../outside_stuff.js";
+import { getOre, map, airAt } from "../noise-utilities.js";
 import { PerlinNoise, rand01 } from "../perlin.js";
 import { getColor } from "../getColor.js";
 

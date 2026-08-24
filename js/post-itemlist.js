@@ -1,6 +1,6 @@
 import Color from "https://colorjs.io/dist/color.js";
 
-import vars, { airAt, map } from "./outside_stuff.js";
+import vars, { airAt, map } from "./noise-utilities.js";
 import { items, layers, ores, structures, biomes, locations, topLayer } from "./content/items.js";
 import { isCave } from "./noise.js";
 import { teleport, generateOre } from "./main.js";

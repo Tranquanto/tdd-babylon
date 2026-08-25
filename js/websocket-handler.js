@@ -24,9 +24,14 @@ async function getUsername() {
 
         const span = document.createElement("span");
         span.classList.add("wikiText");
-        span.innerText = "Please select a username. This will be used only for announcing your rare finds to the Discord server and for death messages."
+        span.innerText = "Please select a username. This will be used only for announcing your rare finds to the Discord server and for death messages (local)."
         + " Alternatively, you may decline and play entirely locally.";
+        const span2 = document.createElement("span");
+        span2.classList.add("wikiText");
+        span2.style.marginTop = "1dvh";
+        span2.innerText = "You can change, enable, or disable this from settings at any time.";
         menu.appendChild(span);
+        menu.appendChild(span2);
 
         const input = document.createElement("input");
         input.placeholder = "Enter Username Here";
@@ -141,7 +146,7 @@ function sendMessage(msg) {
 }
 
 export function webhookMessage(title, desc, ore, chance, pos, footer) {
-    const color = new Color(ores[ore].firstColor).toString({format: "hex"});
+    const color = new Color(ores[ore].firstColor).toString({format: "hex", collapse: false});
     const t = Math.floor(Date.now() / 1000);
     desc += `\nFound <t:${t}:D> at <t:${t}:T>`;
     const data = {

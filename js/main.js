@@ -1435,18 +1435,19 @@ function spawnOre(x, y, z, settings) {
             const centerY = structurePos.centerY;
             const centerZ = structurePos.centerZ;
             
-            if ((x < structurePos.x || x >= structurePos.x + structure.width ||
-                y < structurePos.y || y >= structurePos.y + structure.height ||
-                z < structurePos.z || z >= structurePos.z + structure.depth)) return false;
-                
+            if ((x < structurePos.x - 1 || x > structurePos.x + structure.width + 1 ||
+                y < structurePos.y - 1 || y > structurePos.y + structure.height + 1 ||
+                z < structurePos.z - 1 || z > structurePos.z + structure.depth + 1)) return false;
+
             return {centerX, centerY, centerZ};
         }
             
         let testResult = test(gridX, gridY, gridZ);
+        let r = 1;
         if (!testResult) {
-            for (let xOff = -1; xOff <= 1; xOff++) {
-                for (let yOff = -1; yOff <= 1; yOff++) {
-                    for (let zOff = -1; zOff <= 1; zOff++) {
+            for (let xOff = -r; xOff <= r; xOff++) {
+                for (let yOff = -r; yOff <= r; yOff++) {
+                    for (let zOff = -r; zOff <= r; zOff++) {
                         if (xOff === 0 && yOff === 0 && zOff === 0) continue;
                         const newTestResult = test(gridX + xOff, gridY + yOff, gridZ + zOff);
                         if (newTestResult) {

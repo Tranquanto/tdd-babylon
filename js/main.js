@@ -39,7 +39,8 @@ let lastShadowUpdate = performance.now();
 
 let radiationMap = new VoxelMap(null, {regionSize: 16});
 
-let particleSystemID = 0, veinID = 0, geodeID = 0;
+let particleSystemID = 0, veinID = -1, geodeID = -1;
+let veins = [], geodes = [];
 
 const VEIN_CHANCE = 1 / 150, GEODE_CHANCE = 1 / 2000;
 
@@ -835,6 +836,8 @@ export async function generateOre(x, y, z, ore, bg, settings) {
         settings.customTexture = {ore: "crystals", bg: null};
         settings.meshIDPrefix = "geode";
     }
+
+    if (bg === undefined) bg = "shale";
     
     let meshID = `${settings.meshIDPrefix ? settings.meshIDPrefix + "_" : ""}${ore}_${settings.customModel ?? bg}`;
     const chunk = getChunkKey(x, y, z, MESH_CHUNK_SIZE);
@@ -1535,17 +1538,17 @@ function spawnOre(x, y, z, settings) {
     const veinRnd = rand01(x, y, z, vars.seed + Math.SQRTPI);
     const geodeRnd = rand01(x, y, z, vars.seed + Math.SQRTPI * 2);
     if (!settings.noVein && !ores[oreData.ore]?.noVein && !ores[oreData.ore]?.forcedBG && veinRnd < VEIN_CHANCE && oreData.chance !== Infinity || ores[oreData.ore]?.guaranteedVein) {
-        const num = veinRnd / VEIN_CHANCE;
+        const num = 1 - (ores[oreData.ore]?.guaranteedVein ? veinRnd : veinRnd / VEIN_CHANCE);
         settings.num = num;
         const oreCount = Math.max(Math.round(1 / 1.5 / num * Math.tan(Math.PI / 2 * (1 - (1 - num) ** (Math.log10(100 * (1.004 - num)) / 2 + 1) + 1.9997878)) + 120.721 ** (245000 * (num - 0.99999))), 3); // 3~128000
         generateVein(x, y, z, oreData.ore, oreCount, ores[oreData.ore]?.guaranteedVein, settings.chance, oreData.conditionLabel, settings);
         settings.isVein = true;
     } else if (!settings.noGeode && geodeRnd < GEODE_CHANCE && oreData.chance !== Infinity && !ores[oreData.ore]?.noGeode && !ores[oreData.ore]?.forcedBG || ores[oreData.ore]?.guaranteedGeode) {
-        const num = geodeRnd / GEODE_CHANCE;
+        const num = 1 - (ores[oreData.ore]?.guaranteedGeode ? geodeRnd : geodeRnd / GEODE_CHANCE);
         settings.num = num;
         let radius = Math.floor(Math.tan((Math.PI * (num - 0.05) ** Math.max((num + 0.6) ** 3.6 - 1, 4)) / 2) + 3 - Math.log(1 - num) / Math.log(4)); // 3~12
         if (isNaN(radius) || radius < 3) radius = 3;
-        generateGeode(x, y, z, radius, oreData.ore, settings.chance, ores[oreData.ore]?.guaranteedGeode, oreData.conditionLabel, settings);
+        generateGeode(x, y, z, oreData.ore, radius, settings.chance, ores[oreData.ore]?.guaranteedGeode, oreData.conditionLabel, settings);
     }
     
     generateOre(x, y, z, oreData.ore, oreData.bg, settings);
@@ -1582,13 +1585,8 @@ function generateAdjacent(x, y, z, settings) {
     spawnOre(x, y, z - 1, settings);
 }
 
-function generateCave(x, y, z) {
-    x = Math.round(x);
-    y = Math.round(y);
-    z = Math.round(z);
-}
-
-function generateVein(x, y, z, ore, count, isGuaranteed, chance, conditionLabel, settings = {}) {
+async function generateVein(x, y, z, ore, count, isGuaranteed = ores[ore]?.guaranteedVein, chance, conditionLabel, settings = {}) {
+    console.log(...arguments);
     let num = settings.num;
     let positions = [];
     if (typeof ore !== "string" || !ores[ore]) return;
@@ -1611,6 +1609,11 @@ function generateVein(x, y, z, ore, count, isGuaranteed, chance, conditionLabel,
         }
     }
 
+    let chance1;
+    if (num) {
+        chance1 = (1 - num) * chance * (isGuaranteed ? 1 : VEIN_CHANCE);
+    }
+
     // Shuffle candidates
     for (let i = candidates.length - 1; i > 0; i--) {
         const j = Math.floor(Math.random() * (i + 1));
@@ -1619,34 +1622,23 @@ function generateVein(x, y, z, ore, count, isGuaranteed, chance, conditionLabel,
     for (let i = 0; i < candidates.length; i++) {
         const pos = candidates[i];
         if (count2 >= count) break;
-        const oreData = generateOre(pos.x, pos.y, pos.z, ore, getBGOre(pos.x, pos.y, pos.z) ?? "shale", {isVein: true, veinCount: count + 1, noUpdate: true, chance, conditionLabel, properties: {veinID}});
+        const oreData = await generateOre(pos.x, pos.y, pos.z, ore, getBGOre(pos.x, pos.y, pos.z) ?? "shale", {forced: true, isVein: true, veinCount: count + 1, chance, conditionLabel, properties: {veinID, chance1, num}});
         if (oreData && oreData.ore === ore) {
             positions.push(pos);
             count2++;
         }
     }
-    let end = "";
-    if (num) {
-        const chance1 = (1 - num) * settings.originalChance * (isGuaranteed ? 1 : VEIN_CHANCE);
-        const chance2 = (1 - num) * chance * (isGuaranteed ? 1 : VEIN_CHANCE);
-
-        if (1 / chance2 > stats.lowestRNG) {
-            stats.lowestRNG = 1 / chance2;
-        }
-    }
     if (ores[ore].textureHasTransparency && !ores[ore].allowTransparent || ores[ore].forceAdjacent) {
         for (let i = 0; i < positions.length; i++) {
             const pos = positions[i];
-            generateAdjacent(pos.x, pos.y, pos.z, {noUpdate: true});
+            generateAdjacent(pos.x, pos.y, pos.z);
         }
     }
-
-    if (count2 + 1 > stats.largestVein) {
-        stats.largestVein = count2 + 1;
-    }
+    
+    veins[veinID] = {chance: chance1, count: count2, positions, accessed: false, guaranteed: isGuaranteed};
 }
 
-function generateGeode(x, y, z, radius = 4, ore, chance1, isGuaranteed, conditionLabel, settings = {}) {
+function generateGeode(x, y, z, ore, radius = 4, chance, isGuaranteed, conditionLabel, settings = {}) {
     let num = settings.num;
     if (typeof ore !== "string" || !ores[ore]) return;
     const outerGeode = layers[getLayer(y, x, z, false)]?.geode ?? "chalcedony";
@@ -1654,6 +1646,7 @@ function generateGeode(x, y, z, radius = 4, ore, chance1, isGuaranteed, conditio
     y = Math.round(y);
     z = Math.round(z);
     geodeID++;
+    const chance1 = chance * (1 - num) * (isGuaranteed ? 1 : GEODE_CHANCE);
     // only generate on the outermost layer
     for (let x1 = x - radius; x1 < x + radius; x1++) {
         for (let y1 = y - radius; y1 < y + radius; y1++) {
@@ -1662,27 +1655,19 @@ function generateGeode(x, y, z, radius = 4, ore, chance1, isGuaranteed, conditio
                 if (Math.sqrt((x1 - x) ** 2 + (y1 - y) ** 2 + (z1 - z) ** 2) < radius) {
                     if (Math.sqrt((x1 - x) ** 2 + (y1 - y) ** 2 + (z1 - z) ** 2) < radius - 1) {
                         if (Math.sqrt((x1 - x) ** 2 + (y1 - y) ** 2 + (z1 - z) ** 2) >= radius - 2) {
-                            generateOre(x1, y1, z1, ore, null, {isGeode: true, chance: chance1, conditionLabel, properties: {geodeID}});
+                            generateOre(x1, y1, z1, ore, null, {forced: true, isGeode: true, chance, conditionLabel, properties: {geodeID, chance1, num}});
                         } else {
                             if (!map.at(x1, y1, z1)) map.at(x1, y1, z1, true);
                         }
                     } else {
-                        generateOre(x1, y1, z1, outerGeode, outerGeode);
+                        generateOre(x1, y1, z1, outerGeode, outerGeode, {forced: true});
                     }
                 }
             }
         }
     }
-
-    const chance = settings.originalChance * (1 - num) * (isGuaranteed ? 1 : GEODE_CHANCE);
-    const chance2 = chance1 * (1 - num) * (isGuaranteed ? 1 : GEODE_CHANCE);
-
-    if (1 / chance2 > stats.lowestRNG) {
-        stats.lowestRNG = 1 / chance2;
-    }
-    if (radius > stats.largestGeode) {
-        stats.largestGeode = radius;
-    }
+    
+    geodes[geodeID] = {chance: chance1, radius, accessed: false, guaranteed: isGuaranteed};
 }
 
 function generateTree(x, y, z, trunk, leaves, height = 4, leafSize = 2, settings = {}) {
@@ -2188,7 +2173,69 @@ function mine(x, y, z, settings = {}) {
     }
     const chance = map.at(x, y, z).chance || calculateRarity(ores[ore], y, x, z);
     const displayName = `${map.at(x, y, z).prefix ? map.at(x, y, z).prefix + " " : ""}${map.at(x, y, z).name || ores[ore].name}`;
-    if (!map.at(x, y, z).placed && (chance <= 1e-6 || tiers[ores[ore].tier].maxChance <= 1e-6 || (tiers[ores[ore].tier].global && !ores[ore].noGlobal)) && chance !== 0 && !map.at(x, y, z).isVein && !map.at(x, y, z).isGeode) {
+    if (map.at(x, y, z).veinID !== undefined) {
+        const vein = veins[map.at(x, y, z).veinID];
+
+        if (!vein.accessed) {
+            vein.accessed = true;
+            if (vein.chance <= 1e-7) {
+                let footerText = `${formatChance(chance * (vein.guaranteed ? 1 : VEIN_CHANCE))} chance for the vein to spawn\n${formatChance(1 - map.at(x, y, z).num)} chance for at least ${formatNum(vein.count + 1)} ores`;
+                
+                if (map.at(x, y, z).traits) {
+                    for (let i = 0; i < map.at(x, y, z).traits.length; i++) {
+                        const trait = map.at(x, y, z).traits[i];
+                        footerText += `\n${formatChance(traits[trait].chance)} chance to be ${traits[trait].appendName ? "a " : ""}${traits[trait].name.toLowerCase()}`;
+                    }
+                }
+                
+                if (ores[ore].caveExclusive) {
+                    if (ores[ore].caveExclusive === -1) footerText += `\nNever spawns in caves`;
+                    else footerText += `\nOnly spawns in caves`;
+                }
+                if (map.at(x, y, z).conditionLabel) footerText += `\n${map.at(x, y, z).conditionLabel}`;
+                
+                webhookMessage(`${vars.username} has found a ${vein.count + 1 >= 50 ? "supervein" : "vein"} of ${formatNum(vein.count + 1)} ${settings.name || ores[ore].name}!`, "", ore, vein.chance, {x, y, z, layer: layers[getLayer(y, x, z, false)].name}, {text: footerText});
+            }
+
+            if (1 / vein.chance > stats.lowestRNG) {
+                stats.lowestRNG = 1 / vein.chance;
+            }
+
+            if (vein.count + 1 > stats.largestVein) {
+                stats.largestVein = vein.count + 1;
+            }
+        }
+    } else if (map.at(x, y, z).geodeID !== undefined) {
+        const geode = geodes[map.at(x, y, z).geodeID];
+
+        if (!geode.accessed) {
+            if (geode.chance <= 1e-7) {
+                let footerText = `${formatChance(chance * (geode.guaranteed ? 1 : GEODE_CHANCE))} chance for the geode to spawn\n${formatChance(1 - map.at(x, y, z).num)} chance for a radius of at least ${formatNum(geode.radius)}`;
+                
+                if (map.at(x, y, z).traits) {
+                    for (let i = 0; i < map.at(x, y, z).traits.length; i++) {
+                        const trait = map.at(x, y, z).traits[i];
+                        footerText += `\n${formatChance(traits[trait].chance)} chance to be ${traits[trait].appendName ? "a " : ""}${traits[trait].name.toLowerCase()}`;
+                    }
+                }
+                
+                if (ores[ore].caveExclusive) {
+                    if (ores[ore].caveExclusive === -1) footerText += `\nNever spawns in caves`;
+                    else footerText += `\nOnly spawns in caves`;
+                }
+                if (map.at(x, y, z).conditionLabel) footerText += `\n${map.at(x, y, z).conditionLabel}`;
+                
+                webhookMessage(`${vars.username} has found a radius ${geode.radius} geode of ${settings.name || ores[ore].name}!`, "", ore, geode.chance, {x, y, z, layer: layers[getLayer(y, x, z, false)].name}, {text: footerText});
+            }
+
+            if (1 / geode.chance > stats.lowestRNG) {
+                stats.lowestRNG = 1 / geode.chance;
+            }
+            if (geode.radius > stats.largestGeode) {
+                stats.largestGeode = geode.radius;
+            }
+        }
+    } else if (!map.at(x, y, z).placed && (chance <= 1e-6 || tiers[ores[ore].tier].maxChance <= 1e-6 || (tiers[ores[ore].tier].global && !ores[ore].noGlobal)) && chance !== 0 && !map.at(x, y, z).isVein && !map.at(x, y, z).isGeode) {
         let footerText = "";
         if (map.at(x, y, z).traits) {
             const originalChance = chance / map.at(x, y, z).traits.reduce((acc, trait) => acc * (traits[trait].chance || 1), 1);
@@ -2209,7 +2256,7 @@ function mine(x, y, z, settings = {}) {
         if (footerText) footer = {text: footerText};
         
         webhookMessage(`${vars.username} has found ${displayName}!`, "", ore, chance, {x, y, z, layer: layers[getLayer(y, x, z, false)].name}, footer);
-    }
+    } 
     
     if (!map.at(x, y, z).placed) {
         stats.totalOresMined++;

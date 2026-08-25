@@ -816,7 +816,6 @@ let ores = {
         forcedBG: true,
         desc: "A strong igneous rock.",
         noRandomRotation: true,
-        filler: true, // acts as a filler in the marine biome
         sfx: "stone"
     },
     ice: {
@@ -1681,8 +1680,8 @@ let ores = {
         name: "Sulfur",
         color: "#ff0",
         chance: [
-            {chance: 0.03, maxY: -1001, minY: -1500},
-            {chance: {max: 0.03, min: 0}, maxY: -2001, minY: -2500, easing: {type: "out", exponent: 2}}
+            {chance: 0.026, maxY: -1001, minY: -1500},
+            {chance: {max: 0.026, min: 1 / 999}, maxY: -1501, minY: -2500, easing: {type: "out", exponent: 2}}
         ],
         str: 4,
         desc: "A soft yellow native element."
@@ -1762,6 +1761,19 @@ let ores = {
         light: {
             col: "#fff",
             str: 0.4
+        }
+    },
+    thallium: {
+        name: "Thallium",
+        color: "linear-gradient(to right, #bfb1a3, #dbd9d6)",
+        chance: [
+            {chance: 1 / 245, maxY: -1620, minY: -2005},
+            {chance: {max: 1 / 245, min: 1 / 900}, maxY: -2006, minY: -2125}
+        ],
+        str: 6.4,
+        desc: "A very dangerous and poisonous metal.",
+        onTouch() {
+            vars.player.damage(8, 150, "poison");
         }
     },
     thorium: {
@@ -3462,7 +3474,7 @@ let ores = {
     },
 
     // other / unobtainable
-    blackWall: {
+    spawn: {
         name: "Spawn Point",
         color: "linear-gradient(to right, #000, #fff)",
         chance: 0,
@@ -3473,9 +3485,6 @@ let ores = {
         excludeFromWiki: 2,
         noVein: true,
         noGeode: true,
-        condition(x, y, z) {
-            return x === 0 && z === 0 && y === 1; // only the spawn
-        },
         discovered: true,
         desc: "You can't break this.",
         sfx: "metal"

@@ -1010,9 +1010,9 @@ function openOre(ore) { // open wiki page
         let blockTexture = document.createElement("img");
         blockTexture.className = "wikiOreTexture";
         blockTexture.src = `img/block/${oreData.customTexture ? oreData.customTexture.ore : ore}.png`;
-        const texture = oreData.wikiBG || getBGOre(0, maxY, 0) || "shale";
+        const texture = oreData.wikiBG || getBGOre(0, maxY, 0, {exclude: ["moss"]}) || "shale";
         if (ores[texture]) {
-            if (!ores[texture].noTexture) blockTexture.style.backgroundImage = `url(img/block/${texture}.png)`;
+            if (!ores[texture].noTexture) blockTexture.style.backgroundImage = `url(${vars.getTexture(texture, "ore", 0, false, true)})`;
             else blockTexture.style.background = ores[texture].color;
         }
         if (oreData.textureHasTransparency) blockTexture.style.background = "none";

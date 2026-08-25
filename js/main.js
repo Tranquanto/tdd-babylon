@@ -686,7 +686,7 @@ export function teleport(x, y, z, rotX, rotY) {
 player.teleport = teleport;
 window.teleport = teleport;
 
-function getTexture(ore, type = "ore", face, setTransparent) {
+function getTexture(ore, type = "ore", face, setTransparent, onlyURL) {
     if (typeof type !== "string" && type !== undefined) console.warn("INCORRECT PARAMETERS!!!!!!!!", ...arguments);
 
     if (ores[ore]?.noTexture) return null;
@@ -705,9 +705,12 @@ function getTexture(ore, type = "ore", face, setTransparent) {
             if (ores[id].customTexture?.src) type = "src";
         }
     }
+
+    const url = `img/block/${ore}.png`;
+    if (onlyURL) return url;
     
     if (!textures[`${ore}_${type}`]) {
-        const texture = new BABYLON.Texture(`img/block/${ore}.png`, scene, false, false, BABYLON.Texture.NEAREST_SAMPLINGMODE);
+        const texture = new BABYLON.Texture(url, scene, false, false, BABYLON.Texture.NEAREST_SAMPLINGMODE);
         if (setTransparent || type === "particle") texture.hasAlpha = true;
         texture.wAng = Math.PI;
         textures[`${ore}_${type}`] = texture;
@@ -846,13 +849,13 @@ export async function generateOre(x, y, z, ore, bg, settings) {
     
     let count = meshCounts[meshID] || 0;
     
-    let str = (typeof ores[ore].str === "function" ? ores[ore].str(x, y, z) : ores[ore].str);
+    let str = settings.str ?? (typeof ores[ore].str === "function" ? ores[ore].str(x, y, z) : ores[ore].str);
     const colorData = (settings.oreColor || ores[ore].noTexture || settings.isGeode || ores[ore].oreColor)
     ? ores[ore].firstColor
     : ores[ore].forcedColor ?? "#ffffff";
     let color = getColor(settings.color ?? (ores[ore].colorize !== undefined ? ores[ore].colorize(settings) : colorData));
     
-    if (ores[bg] !== undefined && !ores[ore].singleLayer) str = Math.max(str, typeof ores[bg].str === "function" ? ores[bg].str(x, y, z) : ores[bg].str);
+    if (ores[bg] !== undefined && !ores[ore].singleLayer && settings.str === undefined) str = Math.max(str, typeof ores[bg].str === "function" ? ores[bg].str(x, y, z) : ores[bg].str);
     if (str === undefined || str === 0) str = 1;
     
     if (meshes[`${meshID}_${count}`]?.thinInstanceCount >= MAX_MESH_COUNT) {
@@ -2458,7 +2461,7 @@ function start() {
     for (let i = 0; i < locations.length; i++) {
         const location = locations[i];
         const [x, y, z] = location;
-        if (!saveMap.at(x, y, z)) generateOre(x, y - 1, z, "blackWall", "grass", {traits: ["protected"]});
+        if (!saveMap.at(x, y, z)) generateOre(x, y - 1, z, "spawn", "grass", {traits: ["protected"]});
     }
 }
 start();

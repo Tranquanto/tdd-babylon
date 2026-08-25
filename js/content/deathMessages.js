@@ -29,5 +29,8 @@ export const deathMessages = {
     asbestos: [
         "%s inhaled asbestos",
         "%s wasn't paying attention to the ceiling"
+    ],
+    poison: [
+        "%s was poisoned to death"
     ]
 };

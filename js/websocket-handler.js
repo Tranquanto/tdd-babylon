@@ -133,6 +133,8 @@ ws.onclose = event => {
     if (event.reason === "Invalid origin") {
         console.warn("Connection closed due to invalid origin. Please play at https://tranquanto.github.io/the-draconic-depths for your finds to be announced!");
         clearInterval(reconnectInterval);
+    } else {
+        console.warn("WebSocket closed.");
     }
 }
 
@@ -195,12 +197,16 @@ export function webhookMessage(title, desc, ore, chance, pos, footer) {
     sendMessage({type: "webhook", data, userID});
 }
 
+let attempts = 0;
 const reconnectInterval = setInterval(() => {
+    attempts++;
+    if ((Math.sqrt(8 * attempts + 1) / 2 + 0.5) % 1 !== 0) return;
     // if websocket closes, try to reconnect
     if (ws.readyState === WebSocket.CLOSED) {
-        console.log("WebSocket closed, trying to reconnect...");
+        console.log("Trying to reconnect to WebSocket...");
         ws = new WebSocket(wsURL);
         ws.onopen = () => {
+            attempts = 0;
             console.log("WebSocket reconnected!");
             ping(ws);
         };

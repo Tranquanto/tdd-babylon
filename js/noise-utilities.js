@@ -58,8 +58,11 @@ export const interacted = new VoxelMap(saveMap._obj);
 vars.save = {position: save.position, rotation: save.rotation};
 
 export function setInteracted(x, y, z) {
-    interacted.at(x, y, z, {...map.at(x, y, z)});
-    delete interacted.at(x, y, z).particles;
+    const obj = {...map.at(x, y, z)};
+    delete obj.particles;
+    delete obj.veinID;
+    delete obj.geodeID;
+    interacted.at(x, y, z, obj);
 }
 
 /**
@@ -318,8 +321,8 @@ export function getOre(x, y, z, settings) {
     return {ore: ore ? ore.ore : null, bg: bg ? bg.ore : null, x, y, z, chance: ore ? ore.chance : 0, conditionLabel: getInterval(ore ? ore.ore : null, y).conditionLabel};
 }
 
-export function getBGOre(x, y, z) {
-    const bg = getOre(x, y, z, {onlyBG: true, ignoreUniversal: true});
+export function getBGOre(x, y, z, settings = {}) {
+    const bg = getOre(x, y, z, Object.assign({}, {onlyBG: true, ignoreUniversal: true}, settings));
     return bg ?? null;
 }
 

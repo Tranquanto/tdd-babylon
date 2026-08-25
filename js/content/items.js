@@ -359,6 +359,7 @@ let ores = {
         maxY: 0,
         minY: 0,
         str: 0.1,
+        singleLayer: true,
         textureHasTransparency: true, // to prevent things underneath from not rendering
         noGeode: true,
         noCollision: true,

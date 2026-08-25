@@ -36,9 +36,9 @@ getElementById("settings-oreSound").addEventListener("input", e => {
     updateSetting("oreSound");
 });
 getElementById("settings-username").addEventListener("click", () => {
-    localStorage.removeItem("username");
+    localStorage.removeItem("tdd-username");
     getElementById("settings-username").disabled = true;
-    getElementById("settings-username").innerText = "Username reset. Please refresh the page.";
+    getElementById("settings-username").innerText = "Username reset. Please refresh.";
 });
 getElementById("settings-resolutionScale").addEventListener("input", e => {
     vars.settings.resolutionScale = Number(e.target.value);

@@ -2,6 +2,7 @@ import { seed, caveNoise, caveNoiseSmall, CAVE_SIZE, MIN_CAVE_REQ } from "./perl
 import { deathMessages } from "./content/deathMessages.js";
 
 const vars = {
+    setUsername: false,
     version: "pre-1.0.0a",
     lastUpdate: 1772404520, // unix timestamp of last major update. the user cannot play for 20 minutes after this time
     RARE_ORE_CHANCE_MULTIPLIER: 1,
@@ -49,13 +50,33 @@ const vars = {
             if (this.health <= 0) {
                 this.dead = true;
                 this.health = 0;
+
+                let message;
                 
                 if (deathMessages[source]) {
                     const msg = typeof deathMessages[source] === "function" ? deathMessages[source](vars.username) : Array.isArray(deathMessages[source]) ? deathMessages[source][Math.floor(Math.random() * deathMessages[source].length)] : deathMessages[source];
-                    vars.displayAlert(msg.replaceAll("%s", vars.username), "#f44", 5000);
+                    message = msg.replaceAll("%s", vars.username);
                 } else {
-                    vars.displayAlert(`${vars.username} died (source: ${source})`, "#f44", 5000);
+                    message = `${vars.username} died (source: ${source})`
                 }
+
+                if (String(vars.username) === "undefined") {
+                    const replacements = {
+                        undefined: "You",
+                        they: "you",
+                        them: "you",
+                        their: "your",
+                        theirs: "yours",
+                        themself: "yourself",
+                        themselves: "yourselves",
+                        was: "were",
+                        "wasn't": "weren't"
+                    };
+
+                    message = message.split(" ").map(w => replacements[w] || w).join(" ");
+                }
+
+                vars.displayAlert(message, "#f44", 5000);
             }
         }
     },

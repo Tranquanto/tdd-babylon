@@ -10,6 +10,7 @@ import { rand01 } from "./perlin.js";
 import { getColor } from "./getColor.js";
 import { oreParticles } from "./content/oreParticles.js";
 import { VoxelMap, k } from "./VoxelMap.js";
+import { webhookMessage } from "./websocket-handler.js";
 
 const { player, stats, camera } = vars;
 
@@ -333,6 +334,7 @@ function fixRotation() {
 }
 
 document.addEventListener("keydown", event => {
+    if (!vars.setUsername) return true;
     vars.startIdleTime = performance.now();
     switch (event.code) {
         case 'ArrowUp':
@@ -1353,7 +1355,7 @@ function removeOre(x, y, z, settings = {}) {
         map.at(x, y, z, true);
     }
 
-    if (!settings.fullyRemove) setInteracted(x, y, z);
+    if (!settings.fullyRemove && settings.type !== "structure") setInteracted(x, y, z);
 }
 
 function getPickedOreCoords(hit) {
@@ -1402,6 +1404,7 @@ function spawnOre(x, y, z, settings) {
     z = Math.round(z);
     if (settings === undefined) settings = {caveExclusive: false, noCave: false};
     if (map.at(x, y, z) && !settings.forced && !settings.forceReplace && !map.at(x, y, z).temp) return false;
+    if (oreAt(x, y, z) && !settings.forceReplace) return false;
     if (typeof settings === "string") settings = {caveExclusive: true, noCave: true, caveType: settings};
     const layer = getLayer(y, x, z, false);
     if (layers[layer]?.universalCondition && !layers[layer].universalCondition(x, y, z) && !map.at(x, y, z)) {
@@ -1472,9 +1475,9 @@ function spawnOre(x, y, z, settings) {
     if (isCaveCeiling(x, y, z)) settings.isCaveCeiling = true;
     if (!Object.keys(settings.cave).length) delete settings.cave;
     
-    let oreData = {ore: null};
+    let oreData;
 
-    if (isCave(x, y, z) && !saveMap.at(x, y, z)) {
+    if (!settings.ignoreCaves && isCave(x, y, z) && !saveMap.at(x, y, z)) {
         settings.cave = {};
         settings.caveAir = true;
 
@@ -1495,6 +1498,7 @@ function spawnOre(x, y, z, settings) {
                     const bgOre = getBGOre(pos[0], pos[1] - 1, pos[2]);
 
                     if (!ores[bgOre]?.noDripstone) {
+                        if (!oreData) oreData = {};
                         oreData.ore = oreData.bg = bgOre;
                         settings.noVein = true;
                         settings.noGeode = true;
@@ -1515,7 +1519,7 @@ function spawnOre(x, y, z, settings) {
             settings.cave.ceiling = caveCeilingAdjacent(x, y, z, vars.seed);
             settings.cave.walls = caveWallAdjacent(x, y, z, vars.seed);
             settings.cave.air = true;
-            if (!Object.keys(settings.cave).length) return map.at(x, y, z, {ore: "air"});
+            if (!Object.keys(settings.cave).length) return map.at(x, y, z, true);
         }
     }
 
@@ -2183,6 +2187,29 @@ function mine(x, y, z, settings = {}) {
         inventory.addItem(ore, dropCount);
     }
     const chance = map.at(x, y, z).chance || calculateRarity(ores[ore], y, x, z);
+    const displayName = `${map.at(x, y, z).prefix ? map.at(x, y, z).prefix + " " : ""}${map.at(x, y, z).name || ores[ore].name}`;
+    if (!map.at(x, y, z).placed && (chance <= 1e-6 || tiers[ores[ore].tier].maxChance <= 1e-6 || (tiers[ores[ore].tier].global && !ores[ore].noGlobal)) && chance !== 0 && !map.at(x, y, z).isVein && !map.at(x, y, z).isGeode) {
+        let footerText = "";
+        if (map.at(x, y, z).traits) {
+            const originalChance = chance / map.at(x, y, z).traits.reduce((acc, trait) => acc * (traits[trait].chance || 1), 1);
+            footerText += `${formatChance(originalChance)} chance for the ore to spawn`;
+            for (let i = 0; i < map.at(x, y, z).traits.length; i++) {
+                const trait = map.at(x, y, z).traits[i];
+                footerText += `\n${formatChance(traits[trait].chance)} chance to be ${traits[trait].appendName ? "a " : ""}${traits[trait].name.toLowerCase()}`;
+            }
+        }
+        
+        if (ores[ore].caveExclusive) {
+            if (ores[ore].caveExclusive === -1) footerText += `\nNever spawns in caves`;
+            else footerText += `\nOnly spawns in caves`;
+        }
+        if (map.at(x, y, z).conditionLabel) footerText += `\n${map.at(x, y, z).conditionLabel}`;
+        footerText = footerText.trim();
+        let footer;
+        if (footerText) footer = {text: footerText};
+        
+        webhookMessage(`${vars.username} has found ${displayName}!`, "", ore, chance, {x, y, z, layer: layers[getLayer(y, x, z, false)].name}, footer);
+    }
     
     if (!map.at(x, y, z).placed) {
         stats.totalOresMined++;
@@ -2386,20 +2413,6 @@ function start() {
         const [x, y, z] = location;
         if (!saveMap.at(x, y, z)) generateOre(x, y - 1, z, "blackWall", "grass", {traits: ["protected"]});
     }
-    
-    // start logo css animation
-    function startAnimations() {
-        setTimeout(() => {
-            getElementById("logo").style.display = "";
-            getElementById("logo").style.animation = "initLogo 4s ease-in-out";
-            getElementById("logo").style.animationFillMode = "forwards";
-            setTimeout(() => {
-                getElementById("menu-mask").style.animation = "initMask 2.4s ease-in-out";
-                getElementById("menu-mask").style.animationFillMode = "forwards";
-            }, 1600);
-        }, 0);
-    }
-    requestAnimationFrame(startAnimations);
 }
 start();
 

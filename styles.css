@@ -117,7 +117,7 @@ body {
     position: fixed;
     top: 0;
     left: 0;
-    z-index: 10002;
+    z-index: 1003;
     pointer-events: none;
 }
 
@@ -128,7 +128,7 @@ body {
     width: 100vw;
     height: 100dvh;
     background: rgba(0, 0, 0);
-    z-index: 10001;
+    z-index: 1002;
     animation-fill-mode: forwards;
     pointer-events: none;
 }
@@ -208,7 +208,7 @@ body {
     height: 100dvh;
     top: 0;
     left: 0;
-    z-index: 10000;
+    z-index: 1001;
     /* background-image: url(img/ss.png); */
     background-size: cover;
     background-position: center;
@@ -286,18 +286,34 @@ body {
     color: #b5f;
 }
 
-#resetBtn {
+.username-selectBtn {
+    background: #0f8;
+    color: #042;
+    border: 0.25vw solid #084;
+}
+
+.username-selectBtn:hover {
+    background: #0d6;
+    border: 0.25vw solid #9fb;
+}
+
+.username-selectBtn:active {
+    background: #021;
+    color: #0f8;
+}
+
+#resetBtn, .username-ignoreBtn {
     background: #f00;
     color: #600;
     border: 0.25vw solid #800;
 }
 
-#resetBtn:hover {
+#resetBtn:hover, .username-ignoreBtn:hover {
     background: #c00;
     border: 0.25vw solid #f88;
 }
 
-#resetBtn:active {
+#resetBtn:active, .username-ignoreBtn:active {
     color: #f00;
     background: #200;
 }

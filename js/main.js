@@ -594,7 +594,6 @@ cameraLight.falloffType = BABYLON.Light.FALLOFF_PHYSICAL;
 
 const halfBoundingBox = {x: 0.25, y: 0.9, z: 0.25};
 const checkCollision = (pos, returnOre, includeNoCollision) => {
-    spawnOre(pos.x, pos.y, pos.z);
     const minX = Math.floor(pos.x - halfBoundingBox.x + 0.5);
     const maxX = Math.floor(pos.x + halfBoundingBox.x + 0.5);
     const minY = Math.floor(pos.y - halfBoundingBox.y + 0.9);
@@ -607,6 +606,7 @@ const checkCollision = (pos, returnOre, includeNoCollision) => {
     for (let x of [minX, maxX]) {
         for (let y of [minY, Math.floor((minY + maxY) / 2), maxY]) {
             for (let z of [minZ, maxZ]) {
+                spawnOre(x, y, z);
                 if (
                     y < 0 && !map.at(x, y, z) && !isCave(x, y, z) && checkAdjacent(x, y, z, isCave) ||
                     saveMap.at(x, y, z) && saveMap.at(x, y, z).ore !== "air" && !map.at(x, y, z) ||
@@ -1586,7 +1586,6 @@ function generateAdjacent(x, y, z, settings) {
 }
 
 async function generateVein(x, y, z, ore, count, isGuaranteed = ores[ore]?.guaranteedVein, chance, conditionLabel, settings = {}) {
-    console.log(...arguments);
     let num = settings.num;
     let positions = [];
     if (typeof ore !== "string" || !ores[ore]) return;

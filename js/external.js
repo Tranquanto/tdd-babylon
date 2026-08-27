@@ -1,6 +1,7 @@
 let sensitivity = localStorage.getItem("sensitivity") || 1;
 
 Math.SQRTPI = Math.sqrt(Math.PI);
+Math.CBRT2 = Math.cbrt(2);
 
 Math.lerp = function (a, b, t) {
     // t = (1 - Math.cos(t * Math.PI)) / 2; // Convert to sine easing

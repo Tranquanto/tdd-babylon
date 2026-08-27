@@ -175,7 +175,7 @@ export function webhookMessage(title, desc, ore, chance, pos, footer) {
                     },
                     {
                         name: pos.y > 0 ? "Altitude" : "Depth",
-                        value: `${pos.y.toLocaleString("en-US")}m (${pos.layer})`,
+                        value: `${pos.y.toLocaleString("en-US")}m (||${pos.layer}||)`,
                         inline: true
                     },
                     {

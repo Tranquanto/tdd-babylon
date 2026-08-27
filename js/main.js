@@ -734,7 +734,9 @@ export async function generateOre(x, y, z, ore, bg, settings) {
         return;
     }
 
-    if (oreAt(x, y, z) && !settings.forcedReplace) {
+    if (settings.priority > (map.at(x, y, z)?.priority ?? 0) && !saveMap.at(x, y, z)) {
+        removeOre(x, y, z, {fullyRemove: true, ignoreSave: true});
+    } else if (oreAt(x, y, z) && !settings.forcedReplace) {
         return map.at(x, y, z);
     } else if (airAt(x, y, z) && !settings.forced && !map.at(x, y, z)?.temp || map.at(x, y, z)?.loadingModel) {
         return map.at(x, y, z);
@@ -748,12 +750,13 @@ export async function generateOre(x, y, z, ore, bg, settings) {
 
         if (!(settings.forced && block.ore === "air")) {
             ore = block.ore;
-            bg = block.background ?? block.ore;
+            bg = block.background !== undefined ? block.background : block.ore;
             settings.chance = block.chance;
             settings.offset = block.offset;
             settings.rotation = block.rotation;
             settings.scale = block.scale;
             settings.placed = block.placed;
+            settings.isGeode = block.isGeode;
             settings.properties = {...block};
             progress = block.progress;
         }
@@ -1189,7 +1192,6 @@ export async function generateOre(x, y, z, ore, bg, settings) {
         ps.renderingGroupId = 1;
         ps.blendMode ||= BABYLON.ParticleSystem.BLENDMODE_STANDARD;
         ps.emitter = posWithOffset.clone();
-        ps.disposeOnStop = true;
         ps.start();
         map.at(x, y, z).particles = ps;
     }
@@ -1306,6 +1308,7 @@ function removeOre(x, y, z, settings = {}) {
                     }
                     // remove particle system if it exists
                     if (map.at(x, y, z).particles) {
+                        map.at(x, y, z).disposeOnStop = true;
                         map.at(x, y, z).particles.stop();
                     }
                     
@@ -1361,7 +1364,7 @@ function removeOre(x, y, z, settings = {}) {
         map.at(x, y, z, true);
     }
 
-    if (!settings.fullyRemove && settings.type !== "structure") setInteracted(x, y, z);
+    if (!settings.fullyRemove && settings.type !== "structure" && !settings.ignoreSave) setInteracted(x, y, z);
 }
 
 function getPickedOreCoords(hit) {
@@ -1473,7 +1476,7 @@ function spawnOre(x, y, z, settings) {
         
         const exists = rand01(gridX, gridY, gridZ, vars.seed) < calculateRarity(structure, centerY, centerX, centerZ);
         if (exists && !(generatedStructures[structure.id] && generatedStructures[structure.id][`${gridX}_${gridY}_${gridZ}`])) {
-            generateStructure(gridX, gridY, gridZ, structure.id, {centerX, centerY, centerZ});
+            generateStructure(gridX, gridY, gridZ, structure.id, {centerX, centerY, centerZ, priority: 5});
             // return map.at(x, y, z);
         }
     }
@@ -1605,7 +1608,7 @@ async function generateVein(x, y, z, ore, count, isGuaranteed = ores[ore]?.guara
         for (let y1 = y - r; y1 <= y + r; y1++) {
             for (let z1 = z - r; z1 <= z + r; z1++) {
                 if (x1 === x && y1 === y && z1 === z) continue;
-                if (Math.sqrt((x1 - x) ** 2 + (y1 - y) ** 2 + (z1 - z) ** 2) < r && Math.random() < 0.75) {
+                if (Math.sqrt((x1 - x) ** 2 + (y1 - y) ** 2 + (z1 - z) ** 2) < r) {
                     candidates.push({x: x1, y: y1, z: z1});
                 }
             }
@@ -1619,17 +1622,15 @@ async function generateVein(x, y, z, ore, count, isGuaranteed = ores[ore]?.guara
 
     // Shuffle candidates
     for (let i = candidates.length - 1; i > 0; i--) {
-        const j = Math.floor(Math.random() * (i + 1));
+        const j = Math.floor(rand01(x, y, z, vars.seed + Math.CBRT2 * i) * (i + 1));
         [candidates[i], candidates[j]] = [candidates[j], candidates[i]];
     }
     for (let i = 0; i < candidates.length; i++) {
         const pos = candidates[i];
         if (count2 >= count) break;
-        const oreData = await generateOre(pos.x, pos.y, pos.z, ore, getBGOre(pos.x, pos.y, pos.z) ?? "shale", {forced: true, isVein: true, veinCount: count + 1, chance, conditionLabel, properties: {veinID, chance1, num}});
-        if (oreData && oreData.ore === ore) {
-            positions.push(pos);
-            count2++;
-        }
+        const oreData = await generateOre(pos.x, pos.y, pos.z, ore, getBGOre(pos.x, pos.y, pos.z) ?? "shale", {priority: 2, isVein: true, veinCount: count + 1, chance, conditionLabel, properties: {veinID, chance1, num}});
+        if (oreData && oreData.ore === ore) positions.push(pos);
+        count2++; // TODO: test
     }
     if (ores[ore].textureHasTransparency && !ores[ore].allowTransparent || ores[ore].forceAdjacent) {
         for (let i = 0; i < positions.length; i++) {
@@ -1658,12 +1659,13 @@ function generateGeode(x, y, z, ore, radius = 4, chance, isGuaranteed, condition
                 if (Math.sqrt((x1 - x) ** 2 + (y1 - y) ** 2 + (z1 - z) ** 2) < radius) {
                     if (Math.sqrt((x1 - x) ** 2 + (y1 - y) ** 2 + (z1 - z) ** 2) < radius - 1) {
                         if (Math.sqrt((x1 - x) ** 2 + (y1 - y) ** 2 + (z1 - z) ** 2) >= radius - 2) {
-                            generateOre(x1, y1, z1, ore, null, {forced: true, isGeode: true, chance, conditionLabel, properties: {geodeID, chance1, num}});
+                            generateOre(x1, y1, z1, ore, null, {priority: 4, isGeode: true, chance, conditionLabel, properties: {geodeID, chance1, num, isGeode: true}});
                         } else {
                             if (!map.at(x1, y1, z1)) map.at(x1, y1, z1, true);
+                            else removeOre(x1, y1, z1, {type: "geode"});
                         }
                     } else {
-                        generateOre(x1, y1, z1, outerGeode, outerGeode, {forced: true});
+                        generateOre(x1, y1, z1, outerGeode, outerGeode, {priority: 3});
                     }
                 }
             }
@@ -1725,6 +1727,7 @@ function getStructurePlacementData(structure, gridX, gridY, gridZ) {
 export function generateStructure(gridX, gridY, gridZ, structure, settings) {
     if (settings === undefined) settings = {};
     if (settings === true) settings = {forceLocation: true};
+    settings.priority = 4;
     const str = structures[structure];
     if (!generatedStructures[structure]) generatedStructures[structure] = {};
     if (!str) return;
@@ -1786,12 +1789,12 @@ export function generateStructure(gridX, gridY, gridZ, structure, settings) {
                         if (isAir && !settings.forced && !map.at(x2, y2, z2).temp) continue;
                         if (map.at(x2, y2, z2) && !isAir && settings.forced !== 2 && !map.at(x2, y2, z2).temp) continue;
                         if (block === "air") {
-                            if (settings.forced) removeOre(x2, y2, z2, {type: "structure"});
+                            if (settings.forced || settings.priority > 0) removeOre(x2, y2, z2, {type: "structure"});
                             map.at(x2, y2, z2, true);
                             empty.push(x2, y2, z2);
                         } else if (ores[block]) {
                             if (settings.forced) removeOre(x2, y2, z2, {fullyRemove: true, type: "structure"});
-                            generateOre(x2, y2, z2, block, getBGOre(x2, y2, z2), settings || {noUpdate: true});
+                            generateOre(x2, y2, z2, block, getBGOre(x2, y2, z2), settings || {});
                             if (ores[block].textureHasTransparency && !ores[block].allowTransparent || ores[block].forceAdjacent) {
                                 empty.push(x2, y2, z2);
                             }
@@ -3123,7 +3126,7 @@ function tick() {
                     getElementById("debugInfo").innerText += `\n${block.meshID}`;
                     getElementById("debugInfo").innerText += `\n${block.index}`;
                 }
-                getElementById("oreRarity").textContent = block.placed ? `Placed by ${window.username || "you"}` : (isFinite(chance) && Math.abs(chance) !== 0 ? formatChance(chance) : "");
+                getElementById("oreRarity").textContent = block.placed ? `Placed by ${String(vars.username) !== "undefined" ? vars.username : "you"}` : (isFinite(chance) && Math.abs(chance) !== 0 ? formatChance(chance) : "");
                 getElementById("oreRarity").style.color = tiers[ores[block.ore]?.tier]?.color ?? "#fff";
                 getElementById("oreRarity").style.display = "block";
                 

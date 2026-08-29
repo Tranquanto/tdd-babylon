@@ -90,8 +90,6 @@ raycaster.length = 1000;
 
 // rendering pipeline
 const pipeline = new BABYLON.DefaultRenderingPipeline("pipeline", false, scene, [perspectiveCamera]);
-pipeline.bloomEnabled = true;
-pipeline.bloomWeight = 0.2;
 pipeline.fxaaEnabled = true;
 pipeline.fxaa.samples = 4;
 
@@ -1630,7 +1628,7 @@ async function generateVein(x, y, z, ore, count, isGuaranteed = ores[ore]?.guara
         if (count2 >= count) break;
         const oreData = await generateOre(pos.x, pos.y, pos.z, ore, getBGOre(pos.x, pos.y, pos.z) ?? "shale", {priority: 2, isVein: true, veinCount: count + 1, chance, conditionLabel, properties: {veinID, chance1, num}});
         if (oreData && oreData.ore === ore) positions.push(pos);
-        count2++; // TODO: test
+        count2++;
     }
     if (ores[ore].textureHasTransparency && !ores[ore].allowTransparent || ores[ore].forceAdjacent) {
         for (let i = 0; i < positions.length; i++) {
@@ -2935,21 +2933,6 @@ function tick() {
             
             const musicElem = getElementById("music");
             musicElem.innerText = `♫ ${((layerDetails && layerDetails.music) ? (layerDetails.shortMusic && !musicElem.matches(":hover")) ? layerDetails.shortMusic : layerDetails.music : "None")}`;
-            
-            let BLOOM_SETTINGS = {};
-            if (layerDetails && layerDetails.bloom) {
-                BLOOM_SETTINGS.strength = layerDetails.bloom.strength !== undefined ? layerDetails.bloom.strength : 0.5;
-                BLOOM_SETTINGS.radius = layerDetails.bloom.radius !== undefined ? layerDetails.bloom.radius : 0;
-                BLOOM_SETTINGS.threshold = layerDetails.bloom.threshold !== undefined ? layerDetails.bloom.threshold : 0.5;
-            } else {
-                BLOOM_SETTINGS.strength = 0.5;
-                BLOOM_SETTINGS.radius = 0;
-                BLOOM_SETTINGS.threshold = 0.5;
-            }
-            
-            pipeline.bloomThreshold = BLOOM_SETTINGS.threshold;
-            pipeline.bloomRadius = BLOOM_SETTINGS.radius;
-            pipeline.bloomStrength = BLOOM_SETTINGS.strength;
             
             function updateLighting(area) {
                 scene.fogStart = 0;

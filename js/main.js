@@ -83,7 +83,7 @@ vars.perspectiveCamera = perspectiveCamera;
 
 /** @type {BABYLON.WebXRDefaultExperience} */
 const xr = vars.xr;
-const xrHelper = xr.baseExperience;
+const xrHelper = xr?.baseExperience;
 
 const raycaster = new BABYLON.Ray(new BABYLON.Vector3(), new BABYLON.Vector3());
 raycaster.length = 1000;
@@ -387,17 +387,14 @@ document.addEventListener("keydown", event => {
             pause();
         } else if (STARTED && getElementById("menu-mask").style.display === "none") {
             getElementById("main-menu").style.display = "none";
-            getElementById("logo-container").style.visibility = "hidden";
             getElementById("settings-menu").style.display = "none";
             getElementById("play-menu").style.display = "none";
             getElementById("bgm").play();
             vars.PAUSED = false;
             vars.hasPlayed = true;
         }
-        getElementById("logo").style.animationDuration = "0s";
-        getElementById("menu-mask").style.animationDuration = "0s";
-        getElementById("logo").style.animationDelay = "0s";
-        getElementById("menu-mask").style.display = "none";
+        getElementById("logo").classList.add("animation-complete");
+        getElementById("menu-mask").classList.add("animation-complete");
         break;
         case 'F1':
         event.preventDefault();
@@ -465,6 +462,14 @@ document.addEventListener('keyup', event => {
         break;
     }
 });
+addEventListener("mousedown", () => {
+    if (vars.logoAnimationStarted) {
+        getElementById("menu-mask").style.animation = "none";
+        getElementById("logo").style.animation = "none";
+        getElementById("menu-mask").classList.add("animation-complete");
+        getElementById("logo").classList.add("animation-complete");
+    }
+})
 canvas.addEventListener("mousedown", e => {
     getElementById("dpad").style.display = "none";
     vars.startIdleTime = performance.now();
@@ -2469,7 +2474,6 @@ start();
 
 function pause() {
     vars.PAUSED = true;
-    getElementById("logo-container").style.visibility = "visible";
     getElementById("main-menu").style.display = "block";
     getElementById("bgm").pause();
 }

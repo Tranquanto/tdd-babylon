@@ -121,6 +121,12 @@ body {
     pointer-events: none;
 }
 
+#logo.animation-complete {
+    top: 0;
+    transform: scale(1);
+    filter: opacity(1) drop-shadow(0 0 16px #00f) drop-shadow(0 0 8px #90f);
+}
+
 #menu-mask {
     position: fixed;
     top: 0;
@@ -131,6 +137,10 @@ body {
     z-index: 1002;
     animation-fill-mode: forwards;
     pointer-events: none;
+}
+
+#menu-mask.animation-complete {
+    opacity: 0;
 }
 
 #canvas {
@@ -202,6 +212,10 @@ body {
     margin-top: 0.5vw;
 }
 
+#main-menu {
+    padding-top: calc(10.75vw + 1dvh);
+}
+
 .menu {
     position: fixed;
     width: 100vw;
@@ -213,7 +227,6 @@ body {
     background-size: cover;
     background-position: center;
     padding: 0.5vw;
-    padding-top: calc(10.75vw + 1dvh);
     box-sizing: border-box;
     text-align: center;
     overflow-y: auto;

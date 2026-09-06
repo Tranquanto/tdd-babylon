@@ -6,6 +6,15 @@ export const CHUNK_SIZE = 4;
 export const CHUNK_SIZE_3 = 6;
 export const CHUNK3_RATE = 1;
 
+function smooth(a, y, barrierY) {
+    if (y >= barrierY && y < barrierY + 50) { // smaller caves around the barrier
+        return a * Math.max((y - barrierY + 30) / 80, 0.4);
+    } else if (y > barrierY - 50 && y < barrierY) {
+        return a * Math.max(-(y - barrierY - 30) / 80, 0.4);
+    }
+    return a;
+}
+
 export function noise(x, y, z, seed, cave = caveNoise, caveSmall = caveNoiseSmall) {
     const layer = getLayer(y, x, z, false);
     let a;
@@ -17,11 +26,9 @@ export function noise(x, y, z, seed, cave = caveNoise, caveSmall = caveNoiseSmal
     } else {
         a = caveSmall.noise(x / (CAVE_SIZE / 2), y / (CAVE_SIZE / 2), z / (CAVE_SIZE / 2));
     }
-    if (y >= -8000 && y < -7950) { // smaller caves around the barrier
-        a *= Math.max(1 - (y + 7950) / 100, 0.5);
-    } else if (y > -8050 && y < -8000) {
-        a *= Math.max(1 - (y + 8050) / 100, 0.5);
-    }
+    a = smooth(a, y, barrierY);
+    a = smooth(a, y, -3500);
+    a = smooth(a, y, -4000);
     if (y <= barrierY + 1 && y >= barrierY - 1) a = 0;
     if (y <= -9999 && y >= -10001) a = 0;
     if (y > 0) a = 0;

@@ -74,10 +74,12 @@ async function getUsername() {
 
 function startAnimations() {
     setTimeout(() => {
+        vars.logoAnimationStarted = true;
         getElementById("logo").style.display = "";
         getElementById("logo").style.animation = "initLogo 4s ease-in-out";
         getElementById("logo").style.animationFillMode = "forwards";
         setTimeout(() => {
+            if (getElementById("menu-mask").classList.contains("animation-complete")) return;
             getElementById("menu-mask").style.animation = "initMask 2.4s ease-in-out";
             getElementById("menu-mask").style.animationFillMode = "forwards";
         }, 1600);

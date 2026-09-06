@@ -15,7 +15,6 @@ getElementById("play-normal").addEventListener("click", () => {
     vars.hasPlayed = true;
     getElementById("bgm").play();
     getElementById("play-menu").style.display = "none";
-    getElementById("logo-container").style.visibility = "hidden";
 });
 
 getElementById("settings-btn").addEventListener("click", () => {
